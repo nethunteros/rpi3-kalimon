@@ -225,7 +225,7 @@ cp -f nexmon/brcmfmac43430-sdio.bin kali-$architecture/root
 
 echo "[+] Copying bt firmware"
 cp -f misc/bt/99-com.rules kali-$architecture/etc/udev/rules.d/99-com.rules
-cp -f misc/bt/BCM43430A1.hcd $kali-$architecture/lib/firmware/brcm/BCM43430A1.hcd
+cp -f misc/bt/BCM43430A1.hcd kali-$architecture/lib/firmware/brcm/BCM43430A1.hcd
 
 cat << EOF > kali-$architecture/cleanup
 #!/bin/bash
