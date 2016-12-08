@@ -30,7 +30,7 @@ fi
 basedir=`pwd`/rpi2-kali			    # OUTPUT
 architecture="armhf"			    # ARCH
 DIRECTORY=`pwd`/kali-$architecture	# CHROOT FS
-KERNELDIR=`pwd`/kernel
+TOPDIR=`pwd`
 VERSION=$1
 
 function build_chroot(){
@@ -38,15 +38,17 @@ function build_chroot(){
 arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-utils"
 base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils"
 desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali gtk3-engines-xfce kali-desktop-xfce kali-root-login lightdm network-manager network-manager-gnome xfce4 xserver-xorg-video-fbdev"
-tools="aircrack-ng ethtool hydra john libnfc-bin mfoc nmap passing-the-hash sqlmap usbutils winexe wireshark kismet metasploit-framework"
+tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash sqlmap usbutils winexe wireshark metasploit-framework"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
+mitm="bettercap mitmf responder"
 extras="iceweasel xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential bluez-firmware"
 pygame="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev"
+wireless="aircrack-ng kismet wifite mana-toolkit"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
 
-packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${pygame}"
+packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${pygame} ${mitm} ${wireless}"
 architecture="armhf"
 
 # If you have your own preferred mirrors, set them here.
@@ -128,6 +130,7 @@ apt-get update
 apt-get -y install git-core binutils ca-certificates initramfs-tools u-boot-tools
 apt-get -y install locales console-common less nano git
 echo "root:toor" | chpasswd
+wget https://gist.githubusercontent.com/sturadnidge/5695237/raw/444338d0389da39f5df615ff47ceb12d41be7fdb/75-persistent-net-generator.rules -O /lib/udev/rules.d/75-persistent-net-generator.rules
 sed -i -e 's/KERNEL\!=\"eth\*|/KERNEL\!=\"/' /lib/udev/rules.d/75-persistent-net-generator.rules
 rm -f /etc/udev/rules.d/70-persistent-net.rules
 
@@ -213,19 +216,10 @@ EOF
 chmod +x kali-$architecture/third-stage
 LANG=C chroot kali-$architecture /third-stage
 
-# Copy firmware for nexmon
-echo "[+] Copying wifi firmware"
-mkdir -p kali-$architecture/lib/firmware/brcm/
-cp -f nexmon/brcmfmac43430-sdio.bin kali-$architecture/lib/firmware/brcm/
-cp -f misc/rpi3/brcmfmac43430-sdio.txt kali-$architecture/lib/firmware/brcm/
-
-echo "[+] Creating backup firmware in /root"
+echo "[+] Creating backup wifi firmware in /root"
 cp -f nexmon/brcmfmac43430-sdio.orig.bin kali-$architecture/root
 cp -f nexmon/brcmfmac43430-sdio.bin kali-$architecture/root
-
-echo "[+] Copying bt firmware"
-cp -f misc/bt/99-com.rules kali-$architecture/etc/udev/rules.d/99-com.rules
-cp -f misc/bt/BCM43430A1.hcd kali-$architecture/lib/firmware/brcm/BCM43430A1.hcd
+cp -f misc/rpi3/brcmfmac43430-sdio.txt kali-$architecture/root
 
 cat << EOF > kali-$architecture/cleanup
 #!/bin/bash
@@ -416,13 +410,26 @@ if [ -f "${OUTPUTFILE}" ]; then
     cp /usr/bin/qemu-arm-static $dir/usr/bin/
     chmod +755 $dir/usr/bin/qemu-arm-static
 
+    # Copy firmware for nexmon
+    echo "[+] Copying wifi firmware"
+    mkdir -p $dir/lib/firmware/brcm/
+    cp -rf $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/lib/firmware/brcm/
+    cp -rf $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/lib/firmware/brcm/
+
+    echo "[+] Copying bt firmware"
+    cp -f $TOPDIR/misc/bt/99-com.rules $dir/etc/udev/rules.d/99-com.rules
+    cp -f $TOPDIR/misc/bt/BCM43430A1.hcd $dir/lib/firmware/brcm/BCM43430A1.hcd
+
+    echo "[+] Copy Zram"
+    cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
+    chmod +x $dir/etc/init.d/zram
+
     # Set up TFT
+    wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/adafruit-pitft-touch-cal -O $dir/root/adafruit-pitft-touch-cal
     wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/re4son-pi-tft-setup -O $dir/root/re4son-pi-tft-setup
     chmod +x $dir/root/re4son-pi-tft-setup
+    chmod +x $dir/root/adafruit-pitft-touch-cal
     sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t 35r -u /root"
-    
-    echo "Cleaning up"
-    rm -rf $dir/opt/kernel*
 
     echo "Unmounting"
     sudo umount $dir/boot
