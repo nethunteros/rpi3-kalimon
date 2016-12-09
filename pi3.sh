@@ -22,16 +22,46 @@
 # This is the Raspberry Pi2 Kali ARM build script - http://www.kali.org/downloads
 # A trusted Kali Linux image created by Offensive Security - http://www.offensive-security.com
 
+#################
+# MODIFY THESE  #
+#################
+
+BUILD_TFT=true      # Built for TFT Displays (Small LCD Screens)
+COMPRESS=true       # Compress output file with XZ (useful for release images)
+TFT_SIZE="35r"
+
+#################
+# TFT SIZE TBL  #
+#################
+# '28r'      (Adafruit 2.8 PID 1601)
+# '28c'      (Adafruit 2.8 PID 1983)
+# '35r'      (Adafruit 3.5)
+# '22'       (Adafruit 2.2)
+# 'elec22'   (Elecfreak 2.2)
+# 'hy28b'    (Hotmcu HY28B 2.8)
+# 'jb35'     (JBTek 3.5)
+# 'kum35'    (Kuman 3.5)
+# 'pi70'     (Raspberry Pi 7)
+# 'sain32'   (Sainsmart 3.2)
+# 'sain35'   (Sainsmart 3.5)
+# 'wave32'   (Waveshare 3.2)
+# 'wave35'   (Waveshare 3.5)
+# 'wave35o'  (Waveshare 3.5 Overclocked)
+# 'wave40'   (Waveshare 4)
+# 'wave50'   (Waveshare 5\" HDMI)
+
 if [[ $# -eq 0 ]] ; then
     echo "Please pass version number, e.g. $0 2.0"
     exit
 fi
 
-basedir=`pwd`/rpi2-kali			    # OUTPUT
-architecture="armhf"			    # ARCH
-DIRECTORY=`pwd`/kali-$architecture	# CHROOT FS
+basedir=`pwd`/rpi2-kali             # OUTPUT FOLDER
+architecture="armhf"                # DEFAULT ARCH
+DIRECTORY=`pwd`/kali-$architecture  # CHROOT FS FOLDER
 TOPDIR=`pwd`                        # CURRENT FOLDER
 VERSION=$1
+
+# BUILD THE KALI FILESYSTEM
 
 function build_chroot(){
 
@@ -179,7 +209,7 @@ git clone https://github.com/adafruit/FreqShow.git
 # PiTFT Touch menu
 cd /home/pi
 sudo pip install RPi.GPIO
-git clone https://github.com/Re4son/pitftmenu -b 3.5-MSF # Default to 3.5 size screens (https://www.adafruit.com/product/1601)
+git clone https://github.com/Re4son/pitftmenu -b 3.5-MSF # Default to 3.5 size screens
 echo '%pi ALL=(ALL:ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot, /sbin/shutdown, /home/pi/pitftmenu/menu' >> /etc/sudoers
 echo "/usr/bin/clear"  >> /home/pi/.profile
 echo 'sudo /home/pi/pitftmenu/menu' >> /home/pi/.profile
@@ -313,39 +343,58 @@ deb http://http.kali.org/kali kali-rolling main contrib non-free
 #deb-src http://http.kali.org/kali kali-rolling main non-free contrib
 EOF
 
+
 # Kernel section. If you want to use a custom kernel, or configuration, replace
 # them in this section.
-git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
-cd ${basedir}/root/usr/src/kernel
+# Old way
+# git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
+# cd ${basedir}/root/usr/src/kernel
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 
-# Make kernel with re4sons defconfig
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make -j $(grep -c processor /proc/cpuinfo) zImage modules dtbs
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules_install INSTALL_MOD_PATH=${basedir}/root
-
-# RPI Firmware
+# RPI Firmware (copy to /boot)
+echo "[+] Copying Raspberry Pi Firmware to /boot"
 git clone --depth 1 https://github.com/raspberrypi/firmware.git rpi-firmware
 cp -rf rpi-firmware/boot/* ${basedir}/bootp/
+rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
+rm -rf rpi-firmware
 
-# ARGH.  Device tree support requires we run this *sigh*
-perl scripts/mkknlimg --dtok arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
-#cp arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
-cp arch/arm/boot/dts/bcm*.dtb ${basedir}/bootp/
-cp arch/arm/boot/dts/overlays/*overlay*.dtb* ${basedir}/bootp/overlays/
-rm -rf ${basedir}/root/lib/firmware
+# Linux Firmware (copy to /lib)
+echo "[+] Copying Linux Firmware to /lib"
 cd ${basedir}/root/lib
 git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git firmware
 rm -rf ${basedir}/root/lib/firmware/.git
-cd ${basedir}/root/usr/src/kernel
-make INSTALL_MOD_PATH=${basedir}/root firmware_install
+
+# Make nexmon and kernel
+echo "[+] Making kernel and nexmon firmware"
+cd $TOPDIR/bcm-rpi3/
+source setup_env.sh 
+cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
+make
+
+# Copy nexmon firmware and module
+cp brcmfmac43430-sdio.bin ${basedir}/root/root/
+cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
+cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
+
+echo "[+] Moving to kernel folder"
+cd $TOPDIR/bcm-rpi3/kernel/
+
+echo "[+] Copying kernel"
+# ARGH.  Device tree support requires we run this *sigh*
+perl scripts/mkknlimg --dtok arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
+#cp arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
+cp arch/arm/boot/dts/*.dtb ${basedir}/bootp/
+cp arch/arm/boot/dts/overlays/*.dtb* ${basedir}/bootp/overlays/
+cp arch/arm/boot/dts/overlays/README ${basedir}/bootp/overlays/
+
+echo "[+] Creating and copying modules"
+make INSTALL_MOD_PATH=${basedir}/root firmware_install 
 make mrproper
-cp ${basedir}/root/usr/src/kernel/arch/arm/configs/re4son_pi2_defconfig arch/arm/configs/re4son_pi2_defconfig
+cp arch/arm/configs/re4son_pi2_defconfig .config
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
 make modules_prepare
-rm -rf rpi-firmware
-cd ${basedir}
+
 
 # Create cmdline.txt file
 cat << EOF > ${basedir}/bootp/cmdline.txt
@@ -408,7 +457,7 @@ if [ -f "${OUTPUTFILE}" ]; then
     # Copy firmware for nexmon
     echo "[+] Copying wifi firmware"
     mkdir -p $dir/lib/firmware/brcm/
-    cp -rf $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/lib/firmware/brcm/
+    #cp -rf $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/lib/firmware/brcm/   # This is copied in nexmon build now
     cp -rf $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/lib/firmware/brcm/
 
     echo "[+] Copying bt firmware"
@@ -417,22 +466,25 @@ if [ -f "${OUTPUTFILE}" ]; then
 
     echo "[+] Creating backup wifi firmware in /root"
     cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/root
-    cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/root
-    cp -f $TOPDIR/nexmon/brcmfmac.ko $dir/root
-    cp -f $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/root
+    #cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/root
+    #cp -f $TOPDIR/nexmon/brcmfmac.ko $dir/root
+    #cp -f $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/root
 
     echo "[+] Copy Zram"
     cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
     chmod +x $dir/etc/init.d/zram
 
-    # Set up TFT
-    wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/adafruit-pitft-touch-cal -O $dir/root/adafruit-pitft-touch-cal
-    wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/re4son-pi-tft-setup -O $dir/root/re4son-pi-tft-setup
-    chmod +x $dir/root/re4son-pi-tft-setup
-    chmod +x $dir/root/adafruit-pitft-touch-cal
-    sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t 35r -u /root"
+    if [ "${BUILD_TFT}" = true ] ; then
+        # Set up TFT
+        echo "[+] Setting up TFT settings for ${TFT_SIZE}"
+        wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/adafruit-pitft-touch-cal -O $dir/root/adafruit-pitft-touch-cal
+        wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/re4son-pi-tft-setup -O $dir/root/re4son-pi-tft-setup
+        chmod +x $dir/root/re4son-pi-tft-setup
+        chmod +x $dir/root/adafruit-pitft-touch-cal
+        sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t ${TFT_SIZE} -u /root"
+    fi
 
-    echo "Unmounting"
+    echo "[+] Unmounting"
     sudo umount $dir/boot
     sudo umount -l $dir/proc
     sudo umount -l $dir/dev/
@@ -440,16 +492,22 @@ if [ -f "${OUTPUTFILE}" ]; then
     sudo umount $dir
     rm -rf $dir
 
-	# Compress output and generate sha1sum
+	# Generate sha1sum
 	cd ${basedir}
 	echo "Generating sha1sum for ${OUTPUTFILE}"
 	sha1sum ${OUTPUTFILE} > ${OUTPUTFILE}.sha1sum
-	echo "Compressing ${OUTPUTFILE}"
-	xz -z ${OUTPUTFILE}
-	echo "Generating sha1sum for kali-$VERSION-rpi2.img.xz"
-	sha1sum ${OUTPUTFILE}.xz > ${OUTPUTFILE}.xz.sha1sum
+
+    # Compress output if true
+    if [ "$COMPRESS" = true ] ; then
+	   echo "Compressing ${OUTPUTFILE}"
+	   xz -z ${OUTPUTFILE}
+	   echo "Generating sha1sum for kali-$VERSION-rpi2.img.xz"
+	   sha1sum ${OUTPUTFILE}.xz > ${OUTPUTFILE}.xz.sha1sum
+    fi
+
+    echo "[!] Finished!"
 else
-	echo "${OUTPUTFILE} NOT FOUND!!!"
+	echo "${OUTPUTFILE} NOT FOUND!!! SOMETHING WENT WRONG!?"
 fi
 }
 

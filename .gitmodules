@@ -1,0 +1,3 @@
+[submodule "bcm-rpi3"]
+	path = bcm-rpi3
+	url = https://github.com/nethunteros/bcm-rpi3.git

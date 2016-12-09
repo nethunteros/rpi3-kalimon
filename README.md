@@ -12,6 +12,10 @@ parted kpartx debootstrap pixz qemu-user-static abootimg cgpt vboot-kernel-utils
 vboot-utils bc lzma lzop xz-utils automake autoconf m4 dosfstools rsync u-boot-tools \
 schedtool git e2fsprogs device-tree-compiler ccache dos2unix debootstrap
 ```
+Get the latest kernel by running bootstrap.sh
+``bash
+./bootstrap.sh
+```
 Then run pi3.sh with version numbr
 ```bash
 ./pi3.sh 0.1
