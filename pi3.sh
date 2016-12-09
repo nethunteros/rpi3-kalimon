@@ -30,7 +30,7 @@ fi
 basedir=`pwd`/rpi2-kali			    # OUTPUT
 architecture="armhf"			    # ARCH
 DIRECTORY=`pwd`/kali-$architecture	# CHROOT FS
-TOPDIR=`pwd`
+TOPDIR=`pwd`                        # CURRENT FOLDER
 VERSION=$1
 
 function build_chroot(){
@@ -216,11 +216,6 @@ EOF
 chmod +x kali-$architecture/third-stage
 LANG=C chroot kali-$architecture /third-stage
 
-echo "[+] Creating backup wifi firmware in /root"
-cp -f nexmon/brcmfmac43430-sdio.orig.bin kali-$architecture/root
-cp -f nexmon/brcmfmac43430-sdio.bin kali-$architecture/root
-cp -f misc/rpi3/brcmfmac43430-sdio.txt kali-$architecture/root
-
 cat << EOF > kali-$architecture/cleanup
 #!/bin/bash
 rm -rf /root/.bash_history
@@ -320,7 +315,7 @@ EOF
 
 # Kernel section. If you want to use a custom kernel, or configuration, replace
 # them in this section.
-git clone --depth 1 https://github.com/Re4son/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
+git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
 cd ${basedir}/root/usr/src/kernel
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
@@ -419,6 +414,12 @@ if [ -f "${OUTPUTFILE}" ]; then
     echo "[+] Copying bt firmware"
     cp -f $TOPDIR/misc/bt/99-com.rules $dir/etc/udev/rules.d/99-com.rules
     cp -f $TOPDIR/misc/bt/BCM43430A1.hcd $dir/lib/firmware/brcm/BCM43430A1.hcd
+
+    echo "[+] Creating backup wifi firmware in /root"
+    cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/root
+    cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/root
+    cp -f $TOPDIR/nexmon/brcmfmac.ko $dir/root
+    cp -f $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/root
 
     echo "[+] Copy Zram"
     cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
