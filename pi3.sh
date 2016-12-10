@@ -26,7 +26,7 @@
 # MODIFY THESE  #
 #################
 
-BUILD_TFT=false      # Built for TFT Displays (Small LCD Screens)
+BUILD_TFT=true      # Built for TFT Displays (Small LCD Screens)
 COMPRESS=true       # Compress output file with XZ (useful for release images)
 TFT_SIZE="35r"
 
@@ -146,14 +146,16 @@ EOF
 
 # Create monitor mode start/remove
 cat << EOF > kali-$architecture/usr/bin/monstart
+#!/bin/bash
+ifconfig wlan0 down
 rmmod brcmfmac
 insmod /root/brcmfmac.ko
-LD_PRELOAD=/usr/lib/libfakeioctl.so
 ifconfig wlan0 up
 EOF
 
 cat << EOF > kali-$architecture/usr/bin/monstop
-LD_PRELOAD=
+#!/bin/bash
+ifconfig wlan0 down
 rmmod brcmfmac
 modprobe brcmfmac
 EOF
@@ -232,15 +234,6 @@ fi
 # Turn off wifi power saving
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
 echo "iwconfig wlan0 power off" >> /etc/rc.local
-
-# Nexmon utility build to /usr/bin/nexutil and ioctl intercept
-cd /tmp
-gcc -o /usr/bin/nexutil /tmp/nexutil.c
-chmod +x /usr/bin/nexutil
-cd libfakeioctl
-make
-cp libfakeioctl.so /usr/lib
-make clean
 
 # Make monstart & stop executable
 chmod +x /usr/bin/monstart
