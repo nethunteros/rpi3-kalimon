@@ -26,7 +26,7 @@
 # MODIFY THESE  #
 #################
 
-BUILD_TFT=true      # Built for TFT Displays (Small LCD Screens)
+BUILD_TFT=false      # Built for TFT Displays (Small LCD Screens)
 COMPRESS=true       # Compress output file with XZ (useful for release images)
 TFT_SIZE="35r"
 
@@ -144,6 +144,20 @@ console-common console-data/keymap/policy select Select keymap from full list
 console-common console-data/keymap/full select en-latin1-nodeadkeys
 EOF
 
+# Create monitor mode start/remove
+cat << EOF > kali-$architecture/usr/bin/monstart
+rmmod brcmfmac
+insmod /root/brcmfmac.ko
+LD_PRELOAD=/usr/lib/libfakeioctl.so
+ifconfig wlan0 up
+EOF
+
+cat << EOF > kali-$architecture/usr/bin/monstop
+LD_PRELOAD=
+rmmod brcmfmac
+modprobe brcmfmac
+EOF
+
 cat << EOF > kali-$architecture/third-stage
 #!/bin/bash
 dpkg-divert --add --local --divert /usr/sbin/invoke-rc.d.chroot --rename /usr/sbin/invoke-rc.d
@@ -177,11 +191,47 @@ echo "[+] Making root great again"
 sed -i -e 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 update-rc.d ssh enable
 
-# Add user "pi"
-echo "[+] Creating pi user"
-useradd -m pi
-usermod -a -G sudo,kismet pi
-echo "pi:raspberry" | chpasswd
+if [ "${BUILD_TFT}" = true ] ; then
+    # Add user "pi"
+    echo "[+] Creating pi user"
+    useradd -m pi
+    usermod -a -G sudo,kismet pi
+    echo "pi:raspberry" | chpasswd
+
+    # Install SDR-Scanner
+    cd /home/pi
+    git clone git://git.osmocom.org/rtl-sdr.git
+    cd rtl-sdr
+    mkdir build
+    cd build
+    cmake ../ -DINSTALL_UDEV_RULES=ON -DDETACH_KERNEL_DRIVER=ON
+    make
+    sudo make install
+    sudo ldconfig
+    sudo pip install pyrtlsdr
+    cd /home/pi
+    git clone https://github.com/adafruit/FreqShow.git
+
+    # PiTFT Touch menu
+    cd /home/pi
+    sudo pip install RPi.GPIO
+    git clone https://github.com/Re4son/pitftmenu -b 3.5-MSF # Default to 3.5 size screens
+    echo '%pi ALL=(ALL:ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot, /sbin/shutdown, /home/pi/pitftmenu/menu' >> /etc/sudoers
+    echo "/usr/bin/clear"  >> /home/pi/.profile
+    echo 'sudo /home/pi/pitftmenu/menu' >> /home/pi/.profile
+
+    # Allow "anybody" to access to xserver.  Either console or root
+    sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
+    sed -i 's/allowed_users=root/allowed_users=anybody/' /etc/X11/Xwrapper.config
+
+    # Add virtual keyboard to login screen
+    echo "show-indicators=~language;~a11y;~session;~power" /etc/lightdm/lightdm-gtk-greeter.conf
+    echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
+fi
+
+# Turn off wifi power saving
+echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
+echo "iwconfig wlan0 power off" >> /etc/rc.local
 
 # Nexmon utility build to /usr/bin/nexutil and ioctl intercept
 cd /tmp
@@ -192,58 +242,12 @@ make
 cp libfakeioctl.so /usr/lib
 make clean
 
-# Install SDR-Scanner
-cd /home/pi
-git clone git://git.osmocom.org/rtl-sdr.git
-cd rtl-sdr
-mkdir build
-cd build
-cmake ../ -DINSTALL_UDEV_RULES=ON -DDETACH_KERNEL_DRIVER=ON
-make
-sudo make install
-sudo ldconfig
-sudo pip install pyrtlsdr
-cd /home/pi
-git clone https://github.com/adafruit/FreqShow.git
-
-# PiTFT Touch menu
-cd /home/pi
-sudo pip install RPi.GPIO
-git clone https://github.com/Re4son/pitftmenu -b 3.5-MSF # Default to 3.5 size screens
-echo '%pi ALL=(ALL:ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot, /sbin/shutdown, /home/pi/pitftmenu/menu' >> /etc/sudoers
-echo "/usr/bin/clear"  >> /home/pi/.profile
-echo 'sudo /home/pi/pitftmenu/menu' >> /home/pi/.profile
-
-# Allow "anybody" to access to xserver.  Either console or root
-sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
-sed -i 's/allowed_users=root/allowed_users=anybody/' /etc/X11/Xwrapper.config
-
-# Add virtual keyboard to login screen
-echo "show-indicators=~language;~a11y;~session;~power" /etc/lightdm/lightdm-gtk-greeter.conf
-echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
-
-# Turn off wifi power saving
-echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
-echo "iwconfig wlan0 power off" >> /etc/rc.local
-
-# Create monitor mode start/remove
-cat << EOF > /usr/bin/monstart
-rmmod brcmfmac
-insmod /root/brcmfmac.ko
-LD_PRELOAD=/usr/lib/libfakeioctl.so
-ifconfig wlan0 up
-EOF
-
-cat << EOF > /usr/bin/monstop
-LD_PRELOAD=
-rmmod brcmfmac
-modprobe brcmfmac
-EOF
-
+# Make monstart & stop executable
 chmod +x /usr/bin/monstart
 chmod +x /usr/bin/monstop
 
 # Add bluetooth packages from Raspberry Pi
+# Make bluetooth work again
 cd /tmp
 wget https://archive.raspberrypi.org/debian/pool/main/b/bluez/bluez_5.23-2+rpi2_armhf.deb
 dpkg -i bluez_5.23-2+rpi2_armhf.deb
