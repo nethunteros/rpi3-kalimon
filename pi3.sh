@@ -226,6 +226,23 @@ echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
 echo "iwconfig wlan0 power off" >> /etc/rc.local
 
+# Create monitor mode start/remove
+cat << EOF > /usr/bin/monstart
+rmmod brcmfmac
+insmod /root/brcmfmac.ko
+LD_PRELOAD=/usr/lib/libfakeioctl.so
+ifconfig wlan0 up
+EOF
+
+cat << EOF > /usr/bin/monstop
+LD_PRELOAD=
+rmmod brcmfmac
+modprobe brcmfmac
+EOF
+
+chmod +x /usr/bin/monstart
+chmod +x /usr/bin/monstop
+
 # Add bluetooth packages from Raspberry Pi
 cd /tmp
 wget https://archive.raspberrypi.org/debian/pool/main/b/bluez/bluez_5.23-2+rpi2_armhf.deb
@@ -299,6 +316,20 @@ function ask() {
 
 function build_image(){
 
+echo "*********************************************"
+echo "$(tput setaf 2)
+   .~~.   .~~.
+  '. \ ' ' / .'$(tput setaf 1)
+   .~ .~~~..~.
+  : .~.'~'.~. :
+ ~ (   ) (   ) ~
+( : '~'.~.'~' : )
+ ~ .~ (   ) ~. ~
+  (  : '~' :  ) $(tput sgr0)Kali PI3 Image Generator$(tput setaf 1)
+   '~ .~~~. ~'
+       '~'
+$(tput sgr0)"
+echo "*********************************************"
 mkdir -p ${basedir}
 
 size=7000 # Size of image in megabytes
@@ -366,19 +397,43 @@ git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/lin
 rm -rf ${basedir}/root/lib/firmware/.git
 
 # Make nexmon and kernel
-echo "[+] Making kernel and nexmon firmware"
+echo "*********************************************"
+echo "
+$(tput setaf 2)
+------\
+_____  \
+     \  \
+     |  |
+     |  |
+     |  |
+     |  |
+     |  |
+  ___|  |_______
+ /--------------\
+ |              |
+ |           .--|
+ |  KERNEL   .##|
+ |  BAKING   .##|
+ |            --|  $(tput sgr0)Time to bake the kernel!$(tput setaf 1)
+ |              |
+ \______________/
+  #            #
+  $(tput sgr0)"
+echo "*********************************************"
 cd $TOPDIR/bcm-rpi3/
 source setup_env.sh 
 cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
 make
 
 # Copy nexmon firmware and module
+echo "[+] Copying nexmon firmware and module"
 cp brcmfmac43430-sdio.bin ${basedir}/root/root/
 cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
 cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
 
-echo "[+] Moving to kernel folder"
+echo "[+] Moving to kernel folder and making modules"
 cd $TOPDIR/bcm-rpi3/kernel/
+make modules_install INSTALL_MOD_PATH=${basedir}/root
 
 echo "[+] Copying kernel"
 # ARGH.  Device tree support requires we run this *sigh*
