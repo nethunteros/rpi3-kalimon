@@ -12,24 +12,23 @@ parted kpartx debootstrap pixz qemu-user-static abootimg cgpt vboot-kernel-utils
 vboot-utils bc lzma lzop xz-utils automake autoconf m4 dosfstools rsync u-boot-tools \
 schedtool git e2fsprogs device-tree-compiler ccache dos2unix debootstrap
 ```
-Get the latest kernel by running bootstrap.sh
-``bash
+Get the latest kernel and nexmon by running bootstrap.sh
+```bash
 ./bootstrap.sh
 ```
-Then run pi3.sh with version numbr
+Modify the variables at the top of pi3.sh.  You can turn off TFT display by turn it to false.
+
+Then run pi3.sh with version number
 ```bash
 ./pi3.sh 0.1
 ```
 
 ## Modification
 
-To change the size of LCD screen modify the command line:
+To change the size of LCD screen modify the command line with correct size of screen:
 ```bash
 sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t 35r -u /root"
 ```
-35r is for a 3.5" LCD (Adafaruit).  For different size screens change 35r to match your screen:
-
-https://github.com/Re4son/Re4son-Pi-TFT-Setup/blob/rpts-4.4/re4son-pi-tft-setup#L102
 
 Then run.
 
