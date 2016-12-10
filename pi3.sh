@@ -26,7 +26,7 @@
 # MODIFY THESE  #
 #################
 
-BUILD_TFT=true      # Built for TFT Displays (Small LCD Screens)
+BUILD_TFT=false      # Built for TFT Displays (Small LCD Screens)
 COMPRESS=true       # Compress output file with XZ (useful for release images)
 TFT_SIZE="35r"
 
