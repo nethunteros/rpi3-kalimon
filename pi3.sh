@@ -27,7 +27,7 @@
 #################
 
 BUILD_TFT=false      # Built for TFT Displays (Small LCD Screens)
-COMPRESS=true       # Compress output file with XZ (useful for release images)
+COMPRESS=false       # Compress output file with XZ (useful for release images)
 TFT_SIZE="35r"
 
 #################
@@ -71,14 +71,20 @@ desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-th
 tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash sqlmap usbutils winexe wireshark metasploit-framework"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder"
-extras="iceweasel xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential bluez-firmware"
-pygame="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev"
+extras="iceweasel xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
+tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
 wireless="aircrack-ng kismet wifite mana-toolkit"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
 
-packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${pygame} ${mitm} ${wireless}"
+if [ "${BUILD_TFT}" = true ] ; then
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${tft} ${mitm} ${wireless}"
+else
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless}"
+fi
+
+# Archteicture for Pi3 is armhf
 architecture="armhf"
 
 # If you have your own preferred mirrors, set them here.
@@ -200,6 +206,14 @@ if [ "${BUILD_TFT}" = true ] ; then
     usermod -a -G sudo,kismet pi
     echo "pi:raspberry" | chpasswd
 
+    # Later version of xserver-org-input-libinput kill touch screen! Get last working version and hold!
+    cd /tmp
+    apt-get -y purge xserver-xorg-input-libinput
+    wget http://http.kali.org/pool/main/x/xserver-xorg-input-libinput/xserver-xorg-input-libinput_0.19.0-1_armhf.deb
+    dpkg -i xserver-xorg-input-libinput_0.19.0-1_armhf.deb
+    apt-mark hold xserver-xorg-input-libinput
+    rm -f xserver-xorg-input-libinput_0.19.0-1_armhf.deb
+        
     # Install SDR-Scanner
     cd /home/pi
     git clone git://git.osmocom.org/rtl-sdr.git
@@ -221,6 +235,8 @@ if [ "${BUILD_TFT}" = true ] ; then
     echo '%pi ALL=(ALL:ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot, /sbin/shutdown, /home/pi/pitftmenu/menu' >> /etc/sudoers
     echo "/usr/bin/clear"  >> /home/pi/.profile
     echo 'sudo /home/pi/pitftmenu/menu' >> /home/pi/.profile
+
+    chown -R pi:pi /home/pi
 
     # Allow "anybody" to access to xserver.  Either console or root
     sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
@@ -526,13 +542,15 @@ if [ -f "${OUTPUTFILE}" ]; then
     cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
     chmod +x $dir/etc/init.d/zram
 
+    echo "[+] Setting up for future TFT build"
+    wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/adafruit-pitft-touch-cal -O $dir/root/adafruit-pitft-touch-cal
+    wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/re4son-pi-tft-setup -O $dir/root/re4son-pi-tft-setup
+    chmod +x $dir/root/re4son-pi-tft-setup
+    chmod +x $dir/root/adafruit-pitft-touch-cal
+
     if [ "${BUILD_TFT}" = true ] ; then
         # Set up TFT
         echo "[+] Setting up TFT settings for ${TFT_SIZE}"
-        wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/adafruit-pitft-touch-cal -O $dir/root/adafruit-pitft-touch-cal
-        wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/re4son-pi-tft-setup -O $dir/root/re4son-pi-tft-setup
-        chmod +x $dir/root/re4son-pi-tft-setup
-        chmod +x $dir/root/adafruit-pitft-touch-cal
         sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t ${TFT_SIZE} -u /root"
     fi
 
