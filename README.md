@@ -10,7 +10,7 @@ apt-get install -y git-core gnupg flex bison gperf libesd0-dev build-essential \
 zip curl libncurses5-dev zlib1g-dev libncurses5-dev gcc-multilib g++-multilib \
 parted kpartx debootstrap pixz qemu-user-static abootimg cgpt vboot-kernel-utils \
 vboot-utils bc lzma lzop xz-utils automake autoconf m4 dosfstools rsync u-boot-tools \
-schedtool git e2fsprogs device-tree-compiler ccache dos2unix debootstrap
+schedtool git e2fsprogs device-tree-compiler ccache dos2unix debootstrap libgmp3-dev:i386 libgmp3-dev
 ```
 Get the latest kernel and nexmon by running bootstrap.sh
 ```bash

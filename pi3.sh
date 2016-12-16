@@ -65,6 +65,16 @@ VERSION=$1
 
 function build_chroot(){
 
+if [ ! -f /usr/share/debootstrap/scripts/kali-rolling ]; then
+    #
+    # For those not building on Kali
+    #
+    echo "Missing kali from debootstrap, downloading it"
+
+    curl "http://git.kali.org/gitweb/?p=packages/debootstrap.git;a=blob_plain;f=scripts/kali;hb=refs/heads/kali/master" > /usr/share/debootstrap/scripts/kali
+    ln -s /usr/share/debootstrap/scripts/kali /usr/share/debootstrap/scripts/kali-rolling
+fi
+
 arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-utils"
 base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils"
 desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali gtk3-engines-xfce kali-desktop-xfce kali-root-login lightdm network-manager network-manager-gnome xfce4 xserver-xorg-video-fbdev"
@@ -73,7 +83,7 @@ services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder"
 extras="iceweasel xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
-wireless="aircrack-ng kismet wifite mana-toolkit"
+wireless="aircrack-ng kismet wifite mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses firmware-atheros firmware-libertas firmware-ralink firmware-realtek"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
@@ -103,18 +113,19 @@ debootstrap --foreign --arch $architecture kali-rolling kali-$architecture http:
 
 cp /usr/bin/qemu-arm-static kali-$architecture/usr/bin/
 
+echo "[+] Beginning SECOND stage"
 LANG=C chroot kali-$architecture /debootstrap/debootstrap --second-stage
+
+echo "[+] Sources.list"
 cat << EOF > kali-$architecture/etc/apt/sources.list
 deb http://$mirror/kali kali-rolling main contrib non-free
 EOF
 
-# Copy Nexmon utility to temp so we can build in chroot at stage 3
-cp nexmon/nexutil.c kali-$architecture/tmp/nexutil.c
-cp -rf nexmon/libfakeioctl/ kali-$architecture/tmp/libfakeioctl
-
+echo "[+] Hostname: kali"
 # Set hostname
 echo "kali" > kali-$architecture/etc/hostname
 
+echo "[+] Hosts file"
 # So X doesn't complain, we add kali to hosts
 cat << EOF > kali-$architecture/etc/hosts
 127.0.0.1       kali    localhost
@@ -124,6 +135,7 @@ ff00::0         ip6-mcastprefix
 ff02::1         ip6-allnodes
 ff02::2         ip6-allrouters
 EOF
+chmod 644 kali-$architecture/etc/hosts
 
 cat << EOF > kali-$architecture/etc/network/interfaces
 auto lo
@@ -132,6 +144,7 @@ iface lo inet loopback
 auto eth0
 iface eth0 inet dhcp
 EOF
+chmod 644 kali-$architecture/etc/network/interfaces
 
 cat << EOF > kali-$architecture/etc/resolv.conf
 nameserver 8.8.8.8
@@ -150,24 +163,55 @@ console-common console-data/keymap/policy select Select keymap from full list
 console-common console-data/keymap/full select en-latin1-nodeadkeys
 EOF
 
-# Create monitor mode start/remove
-cat << EOF > kali-$architecture/usr/bin/monstart
-#!/bin/bash
-ifconfig wlan0 down
-rmmod brcmfmac
-insmod /root/brcmfmac.ko
-ifconfig wlan0 up
+cat << EOF > kali-$architecture/etc/init.d/resize2fs_once
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          resize2fs_once
+# Required-Start:
+# Required-Stop:
+# Default-Start: 3
+# Default-Stop:
+# Short-Description: Resize the root filesystem to fill partition
+# Description:
+### END INIT INFO
+. /lib/lsb/init-functions
+case "$1" in
+  start)
+    log_daemon_msg "Starting resize2fs_once"
+    ROOT_DEV=`grep -Eo 'root=[[:graph:]]+' /proc/cmdline | cut -d '=' -f 2-` &&
+    resize2fs $ROOT_DEV &&
+    update-rc.d resize2fs_once remove &&
+    rm /etc/init.d/resize2fs_once &&
+    log_end_msg $?
+    ;;
+  *)
+    echo "Usage: $0 start" >&2
+    exit 3
+    ;;
+esac
 EOF
+chmod 644 kali-$architecture/etc/init.d/resize2fs_once
 
-cat << EOF > kali-$architecture/usr/bin/monstop
-#!/bin/bash
-ifconfig wlan0 down
-rmmod brcmfmac
-modprobe brcmfmac
+cat << EOF > kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
+#
+[Unit]
+Description=Regenerate SSH host keys
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sh -c "if [ -e /dev/hwrng ]; then dd if=/dev/hwrng of=/dev/urandom count=1 bs=4096; fi"
+ExecStart=/usr/bin/ssh-keygen -A
+ExecStartPost=/bin/rm /lib/systemd/system/regenerate_ssh_host_keys.service ; /usr/sbin/update-rc.d regenerate_ssh_host_keys remove
+
+[Install]
+WantedBy=multi-user.target
 EOF
+chmod 644 kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
 
+echo "[+] Begin THIRD STAGE"
 cat << EOF > kali-$architecture/third-stage
 #!/bin/bash
+dpkg-divert --add --local /lib/udev/rules.d/75-persistent-net-generator.rules
 dpkg-divert --add --local --divert /usr/sbin/invoke-rc.d.chroot --rename /usr/sbin/invoke-rc.d
 cp /bin/true /usr/sbin/invoke-rc.d
 echo -e "#!/bin/sh\nexit 101" > /usr/sbin/policy-rc.d
@@ -182,7 +226,6 @@ apt-get update
 apt-get -y install git-core binutils ca-certificates initramfs-tools u-boot-tools
 apt-get -y install locales console-common less nano git
 echo "root:toor" | chpasswd
-wget https://gist.githubusercontent.com/sturadnidge/5695237/raw/444338d0389da39f5df615ff47ceb12d41be7fdb/75-persistent-net-generator.rules -O /lib/udev/rules.d/75-persistent-net-generator.rules
 sed -i -e 's/KERNEL\!=\"eth\*|/KERNEL\!=\"/' /lib/udev/rules.d/75-persistent-net-generator.rules
 rm -f /etc/udev/rules.d/70-persistent-net.rules
 
@@ -192,20 +235,27 @@ apt-get --yes --force-yes install $packages
 apt-get --yes --force-yes dist-upgrade
 apt-get --yes --force-yes autoremove
 
+systemctl enable regenerate_ssh_host_keys
+systemctl enable resize2fs_once
+
+rm -f /etc/ssh/ssh_host_*_key*
+
 # Because copying in authorized_keys is hard for people to do, let's make the
 # image insecure and enable root login with a password.
-
 echo "[+] Making root great again"
 sed -i -e 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 update-rc.d ssh enable
 
-if [ "${BUILD_TFT}" = true ] ; then
-    # Add user "pi"
-    echo "[+] Creating pi user"
-    useradd -m pi
-    usermod -a -G sudo,kismet pi
-    echo "pi:raspberry" | chpasswd
+# Add user "pi"
+echo "[+] Creating pi user with password raspberry"
+useradd -m pi -s /bin/bash
+group add pi
+usermod -a -G sudo,kismet,pi pi
+echo "pi:raspberry" | chpasswd
+chown -R pi:pi /home/pi
+echo "pi ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers 
 
+if [ "${BUILD_TFT}" = true ] ; then
     # Later version of xserver-org-input-libinput kill touch screen! Get last working version and hold!
     cd /tmp
     apt-get -y purge xserver-xorg-input-libinput
@@ -251,6 +301,13 @@ fi
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
 echo "iwconfig wlan0 power off" >> /etc/rc.local
 
+ln -sf /etc/systemd/system/autologin@.service /etc/systemd/system/getty.target.wants/getty@tty1.service
+echo "[Service]\nTTYVTDisallocate=no" > /etc/systemd/system/getty@tty1.service.d/noclear.conf
+chmod 644 /etc/systemd/system/getty@tty1.service.d/noclear.conf
+
+echo "exit 101" > /usr/sbin/policy-rc.d
+chmod 744 /usr/sbin/policy-rc.d
+
 # Make monstart & stop executable
 chmod +x /usr/bin/monstart
 chmod +x /usr/bin/monstop
@@ -261,10 +318,6 @@ cd /tmp
 wget https://archive.raspberrypi.org/debian/pool/main/b/bluez/bluez_5.23-2+rpi2_armhf.deb
 dpkg -i bluez_5.23-2+rpi2_armhf.deb
 apt-mark hold bluez
-
-wget https://archive.raspberrypi.org/debian/pool/main/p/pi-bluetooth/pi-bluetooth_0.1.1_armhf.deb
-dpkg -i pi-bluetooth_0.1.1_armhf.deb
-apt-mark hold pi-bluetooth
 
 rm -f /usr/sbin/policy-rc.d
 rm -f /usr/sbin/invoke-rc.d
@@ -290,6 +343,58 @@ EOF
 
 chmod +x kali-$architecture/cleanup
 LANG=C chroot kali-$architecture /cleanup
+
+# Raspbian Configs worth adding
+
+cat << EOF > kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf 
+country=GB
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+EOF
+chmod 600 kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf
+
+cat << EOF > kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
+[Service]
+ExecStart=
+ExecStart=/sbin/dhcpcd -q -w
+EOF
+chmod 644 kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
+
+cat << EOF > kali-$architecture/etc/apt/apt.conf.d/50raspi
+# never use pdiffs. Current implementation is very slow on low-powered devices
+Acquire::PDiffs "0";
+
+# download up to 5 pdiffs:
+#Acquire::PDiffs::FileLimit "5";
+EOF
+chmod 644 kali-$architecture/etc/apt/apt.conf.d/50raspi
+
+cat << EOF > kali-$architecture/etc/modprobe.d/ipv6.conf
+# Don't load ipv6 by default
+alias net-pf-10 off
+#alias ipv6 off
+EOF
+chmod 644 kali-$architecture/etc/modprobe.d/ipv6.conf
+
+# Create monitor mode start/remove
+cat << EOF > kali-$architecture/usr/bin/monstart
+#!/bin/bash
+ifconfig wlan0 down
+rmmod brcmfmac
+cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcmfmac43430-sdio.bin
+insmod /root/brcmfmac.ko
+ifconfig wlan0 up
+EOF
+chmod 644 kali-$architecture/usr/bin/monstart
+
+cat << EOF > kali-$architecture/usr/bin/monstop
+#!/bin/bash
+ifconfig wlan0 down
+rmmod brcmfmac
+cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcmfmac43430-sdio.bin
+modprobe brcmfmac
+EOF
+chmod 644 kali-$architecture/usr/bin/monstop
 
 umount kali-$architecture/dev/pts
 umount kali-$architecture/dev/
@@ -438,11 +543,13 @@ source setup_env.sh
 cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
 make
 
-# Copy nexmon firmware and module
+# Copy nexmon firmware and module to /root
 echo "[+] Copying nexmon firmware and module"
 cp brcmfmac43430-sdio.bin ${basedir}/root/root/
-cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
 cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
+
+# Stick with original firmware so wifi works out of the box
+cp $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin ${basedir}/root/lib/firmware/brcm/
 
 echo "[+] Moving to kernel folder and making modules"
 cd $TOPDIR/bcm-rpi3/kernel/
@@ -522,6 +629,65 @@ if [ -f "${OUTPUTFILE}" ]; then
     cp /usr/bin/qemu-arm-static $dir/usr/bin/
     chmod +755 $dir/usr/bin/qemu-arm-static
 
+cat << EOF > $dir/boot/config.txt
+# For more options and information see
+# http://www.raspberrypi.org/documentation/configuration/config-txt.md
+# Some settings may impact device functionality. See link above for details
+
+# uncomment if you get no picture on HDMI for a default "safe" mode
+#hdmi_safe=1
+
+# uncomment this if your display has a black border of unused pixels visible
+# and your display can output without overscan
+#disable_overscan=1
+
+# uncomment the following to adjust overscan. Use positive numbers if console
+# goes off screen, and negative if there is too much border
+#overscan_left=16
+#overscan_right=16
+#overscan_top=16
+#overscan_bottom=16
+
+# uncomment to force a console size. By default it will be display's size minus
+# overscan.
+#framebuffer_width=1280
+#framebuffer_height=720
+
+# uncomment if hdmi display is not detected and composite is being output
+#hdmi_force_hotplug=1
+
+# uncomment to force a specific HDMI mode (this will force VGA)
+#hdmi_group=1
+#hdmi_mode=1
+
+# uncomment to force a HDMI mode rather than DVI. This can make audio work in
+# DMT (computer monitor) modes
+#hdmi_drive=2
+
+# uncomment to increase signal to HDMI, if you have interference, blanking, or
+# no display
+#config_hdmi_boost=4
+
+# uncomment for composite PAL
+#sdtv_mode=2
+
+#uncomment to overclock the arm. 700 MHz is the default.
+#arm_freq=800
+
+# Uncomment some or all of these to enable the optional hardware interfaces
+#dtparam=i2c_arm=on
+#dtparam=i2s=on
+#dtparam=spi=on
+
+# Uncomment this to enable the lirc-rpi module
+#dtoverlay=lirc-rpi
+
+# Additional overlays and parameters are documented /boot/overlays/README
+
+# Enable audio (loads snd_bcm2835)
+dtparam=audio=on
+EOF
+
     # Copy firmware for nexmon
     echo "[+] Copying wifi firmware"
     mkdir -p $dir/lib/firmware/brcm/
@@ -562,38 +728,38 @@ if [ -f "${OUTPUTFILE}" ]; then
     sudo umount $dir
     rm -rf $dir
 
-	# Generate sha1sum
-	cd ${basedir}
-	echo "Generating sha1sum for ${OUTPUTFILE}"
-	sha1sum ${OUTPUTFILE} > ${OUTPUTFILE}.sha1sum
+    # Generate sha1sum
+    cd ${basedir}
+    echo "Generating sha1sum for ${OUTPUTFILE}"
+    sha1sum ${OUTPUTFILE} > ${OUTPUTFILE}.sha1sum
 
     # Compress output if true
     if [ "$COMPRESS" = true ] ; then
-	   echo "Compressing ${OUTPUTFILE}"
-	   xz -z ${OUTPUTFILE}
-	   echo "Generating sha1sum for kali-$VERSION-rpi2.img.xz"
-	   sha1sum ${OUTPUTFILE}.xz > ${OUTPUTFILE}.xz.sha1sum
+       echo "Compressing ${OUTPUTFILE}"
+       xz -z ${OUTPUTFILE}
+       echo "Generating sha1sum for kali-$VERSION-rpi2.img.xz"
+       sha1sum ${OUTPUTFILE}.xz > ${OUTPUTFILE}.xz.sha1sum
     fi
 
     echo "[!] Finished!"
 else
-	echo "${OUTPUTFILE} NOT FOUND!!! SOMETHING WENT WRONG!?"
+    echo "${OUTPUTFILE} NOT FOUND!!! SOMETHING WENT WRONG!?"
 fi
 }
 
 if [ ! -d "$DIRECTORY" ]; then
-	if ask "[?] Missing chroot. Build?"; then
-		build_chroot
+    if ask "[?] Missing chroot. Build?"; then
+        build_chroot
         build_image
-	else
-		exit
-	fi
+    else
+        exit
+    fi
 else
-	if ask "[?] Previous chroot found.  Build new one?"; then
-		build_chroot
+    if ask "[?] Previous chroot found.  Build new one?"; then
+        build_chroot
         build_image
-	else
-		echo "Skipping chroot build"
-		build_image
-	fi
+    else
+        echo "Skipping chroot build"
+        build_image
+    fi
 fi
