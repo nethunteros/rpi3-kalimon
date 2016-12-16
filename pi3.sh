@@ -249,7 +249,7 @@ update-rc.d ssh enable
 # Add user "pi"
 echo "[+] Creating pi user with password raspberry"
 useradd -m pi -s /bin/bash
-group add pi
+groupadd pi
 usermod -a -G sudo,kismet,pi pi
 echo "pi:raspberry" | chpasswd
 chown -R pi:pi /home/pi
@@ -308,10 +308,6 @@ chmod 644 /etc/systemd/system/getty@tty1.service.d/noclear.conf
 echo "exit 101" > /usr/sbin/policy-rc.d
 chmod 744 /usr/sbin/policy-rc.d
 
-# Make monstart & stop executable
-chmod +x /usr/bin/monstart
-chmod +x /usr/bin/monstop
-
 # Add bluetooth packages from Raspberry Pi
 # Make bluetooth work again
 cd /tmp
@@ -353,12 +349,12 @@ update_config=1
 EOF
 chmod 600 kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf
 
-cat << EOF > kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
-[Service]
-ExecStart=
-ExecStart=/sbin/dhcpcd -q -w
-EOF
-chmod 644 kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
+#cat << EOF > kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
+#[Service]
+#ExecStart=
+#ExecStart=/sbin/dhcpcd -q -w
+#EOF
+#chmod 644 kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
 
 cat << EOF > kali-$architecture/etc/apt/apt.conf.d/50raspi
 # never use pdiffs. Current implementation is very slow on low-powered devices
