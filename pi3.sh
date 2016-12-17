@@ -76,22 +76,25 @@ if [ ! -f /usr/share/debootstrap/scripts/kali-rolling ]; then
 fi
 
 arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-utils"
-base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils"
-desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali gtk3-engines-xfce kali-desktop-xfce kali-root-login lightdm network-manager network-manager-gnome xfce4 xserver-xorg-video-fbdev"
+base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus"
+desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
+xfce4="gtk3-engines-xfce xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder"
+#lxde="lxde-core lxde lightdm kali-desktop-lxde lxtask gksu netsurf-gtk zenity xdg-utils"
 tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash sqlmap usbutils winexe wireshark metasploit-framework"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
-mitm="bettercap mitmf responder"
-extras="iceweasel xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
+mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
+extras="unzip curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
-wireless="aircrack-ng kismet wifite mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses firmware-atheros firmware-libertas firmware-ralink firmware-realtek"
+wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses firmware-atheros firmware-libertas firmware-ralink firmware-realtek"
+vpn="network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
 
 if [ "${BUILD_TFT}" = true ] ; then
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${tft} ${mitm} ${wireless}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn}"
 else
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn}"
 fi
 
 # Archteicture for Pi3 is armhf
@@ -190,7 +193,7 @@ case "$1" in
     ;;
 esac
 EOF
-chmod 644 kali-$architecture/etc/init.d/resize2fs_once
+chmod 755 kali-$architecture/etc/init.d/resize2fs_once
 
 cat << EOF > kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
 #
@@ -208,6 +211,31 @@ WantedBy=multi-user.target
 EOF
 chmod 644 kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
 
+# Tweaks
+cp $TOPDIR/misc/xfce4-setup.sh kali-$architecture/tmp/xfce4-setup.sh
+cp $TOPDIR/misc/bashtweaks.sh kali-$architecture/tmp/bashtweaks.sh
+
+# Create monitor mode start/remove
+cat << EOF > kali-$architecture/usr/bin/monstart
+#!/bin/bash
+echo "Brining interface down"
+ifconfig wlan0 down
+rmmod brcmfmac
+echo "Copying modified firmware"
+cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcmfmac43430-sdio.bin && insmod /root/brcmfmac.ko
+echo "Bringing wlan0"
+ifconfig wlan0 up
+EOF
+
+cat << EOF > kali-$architecture/usr/bin/monstop
+#!/bin/bash
+echo "Brining interface down"
+ifconfig wlan0 down
+rmmod brcmfmac
+echo "Copying original firmware"
+cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcmfmac43430-sdio.bin && modprobe brcmfmac
+EOF
+
 echo "[+] Begin THIRD STAGE"
 cat << EOF > kali-$architecture/third-stage
 #!/bin/bash
@@ -223,9 +251,10 @@ apt-get --yes --force-yes install locales-all
 debconf-set-selections /debconf.set
 rm -f /debconf.set
 apt-get update
-apt-get -y install git-core binutils ca-certificates initramfs-tools u-boot-tools
+apt-get -y install git-core binutils ca-certificates initramfs-tools u-boot-tools curl
 apt-get -y install locales console-common less nano git
 echo "root:toor" | chpasswd
+wget https://gist.githubusercontent.com/sturadnidge/5695237/raw/444338d0389da39f5df615ff47ceb12d41be7fdb/75-persistent-net-generator.rules -O /lib/udev/rules.d/75-persistent-net-generator.rules
 sed -i -e 's/KERNEL\!=\"eth\*|/KERNEL\!=\"/' /lib/udev/rules.d/75-persistent-net-generator.rules
 rm -f /etc/udev/rules.d/70-persistent-net.rules
 
@@ -249,12 +278,28 @@ update-rc.d ssh enable
 # Add user "pi"
 echo "[+] Creating pi user with password raspberry"
 useradd -m pi -s /bin/bash
-groupadd pi
 usermod -a -G sudo,kismet,pi pi
 echo "pi:raspberry" | chpasswd
 chown -R pi:pi /home/pi
 echo "pi ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers 
 
+# Enable autologin for user pi
+mkdir -p /etc/lightdm/lightdm.conf.d/
+echo "[SeatDefaults]\nautologin-user=pi" > /etc/lightdm/lightdm.conf.d/12-autologin.conf
+
+# XFCE stuff (both users?)
+echo "[+] Running XFCE setup"
+chmod +x /tmp/xfce4-setup.sh
+/tmp/xfce4-setup.sh
+
+echo "[+] Running bash tweaks"
+chmod +x /tmp/bashtweaks.sh
+/tmp/bashtweaks.sh
+
+chmod +x /usr/bin/monstart
+chmod +x /usr/bin/monstop
+
+# FOR TFT DISPLAYS
 if [ "${BUILD_TFT}" = true ] ; then
     # Later version of xserver-org-input-libinput kill touch screen! Get last working version and hold!
     cd /tmp
@@ -301,13 +346,55 @@ fi
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
 echo "iwconfig wlan0 power off" >> /etc/rc.local
 
-ln -sf /etc/systemd/system/autologin@.service /etc/systemd/system/getty.target.wants/getty@tty1.service
-echo "[Service]\nTTYVTDisallocate=no" > /etc/systemd/system/getty@tty1.service.d/noclear.conf
-chmod 644 /etc/systemd/system/getty@tty1.service.d/noclear.conf
-
 echo "exit 101" > /usr/sbin/policy-rc.d
 chmod 744 /usr/sbin/policy-rc.d
 
+# Wireshark remove warning
+mkdir -p /home/pi/.wireshark/
+mkdir -p /root/.wireshark/
+echo "privs.warn_if_elevated: FALSE" > /home/pi/.wireshark/recent_common
+echo "privs.warn_if_elevated: FALSE" > /root/.wireshark/recent_common
+mv -f /usr/share/wireshark/init.lua{,.disabled}
+
+############## Extra g0tmi1k apps ###############
+apt -y -qq install ipcalc sipcalc psmisc htop gparted hashid webshells php-cli wordlists p0f seclists cowsay shutter
+
+# Git clone webshells
+git clone -q -b master https://github.com/sensepost/reGeorg.git /opt/regeorg-git
+git clone -q -b master https://github.com/b374k/b374k.git /opt/b374k-git
+git clone -q -b master https://github.com/vrana/adminer.git /opt/adminer-git
+git clone -q -b master https://github.com/binkybear/rock3tman.git /opt/rock3tman-git
+
+# Generate shells
+pushd /opt/b374k-git/ >/dev/null
+git pull -q
+php index.php -o b374k.php -s
+popd >/dev/null
+
+pushd /opt/adminer-git/ >/dev/null
+git pull -q
+php compile.php 2>/dev/null
+popd >/dev/null
+
+# Symlink webshells
+ln -sf /opt/reGeorg-git /usr/share/webshells/reGeorg
+ln -sf /opt/b374k-git /usr/share/webshells/php/b374k
+file=$(find /opt/adminer-git/ -name adminer-*.php -type f -print -quit)
+ln -sf "${file}" /usr/share/webshells/php/adminer.php
+
+# Fun MOTD
+echo "Moo" | /usr/games/cowsay > /etc/motd
+
+# SSH Allow authorized keys
+sed -i 's/^#AuthorizedKeysFile /AuthorizedKeysFile /g' "/etc/ssh/sshd_config"  # Allow for key based login
+
+# Crackmapexec
+apt-get install -y libssl-dev libffi-dev python-dev build-essential virtualenvwrapper
+#source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
+#mkvirtualenv CME
+pip install crackmapexec
+
+############################################################
 # Add bluetooth packages from Raspberry Pi
 # Make bluetooth work again
 cd /tmp
@@ -322,8 +409,11 @@ dpkg-divert --remove --rename /usr/sbin/invoke-rc.d
 rm -f /third-stage
 EOF
 
+# Execute Third-Stage
 chmod +x kali-$architecture/third-stage
 LANG=C chroot kali-$architecture /third-stage
+
+####### END THIRD STAGE - CLEANUP ################
 
 cat << EOF > kali-$architecture/cleanup
 #!/bin/bash
@@ -331,7 +421,7 @@ rm -rf /root/.bash_history
 apt-get update
 apt-get clean
 rm -f /0
-rm -rf /tmp/*.deb /tmp/libfakeioctl /tmp/*.c
+rm -rf /tmp/*.deb /tmp/libfakeioctl /tmp/*.c /tmp/*.sh
 rm -f /hs_err*
 rm -f cleanup
 rm -f /usr/bin/qemu*
@@ -371,26 +461,6 @@ alias net-pf-10 off
 #alias ipv6 off
 EOF
 chmod 644 kali-$architecture/etc/modprobe.d/ipv6.conf
-
-# Create monitor mode start/remove
-cat << EOF > kali-$architecture/usr/bin/monstart
-#!/bin/bash
-ifconfig wlan0 down
-rmmod brcmfmac
-cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcmfmac43430-sdio.bin
-insmod /root/brcmfmac.ko
-ifconfig wlan0 up
-EOF
-chmod 644 kali-$architecture/usr/bin/monstart
-
-cat << EOF > kali-$architecture/usr/bin/monstop
-#!/bin/bash
-ifconfig wlan0 down
-rmmod brcmfmac
-cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcmfmac43430-sdio.bin
-modprobe brcmfmac
-EOF
-chmod 644 kali-$architecture/usr/bin/monstop
 
 umount kali-$architecture/dev/pts
 umount kali-$architecture/dev/
