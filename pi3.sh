@@ -1,27 +1,24 @@
 #!/bin/bash
-
-# Kali Linux on ARM with
-# re4son's PI TFT kernel with nexmon
 #
-# re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
-# > github: https://github.com/re4son/
+# Kali Linux on Raspberry Pi3 (ARM) by Binkyear (binkybear@nethunter.com)
 #
-# nexmon: https://github.com/seemoo-lab/bcm-rpi3
+# Not an official Kali Linux image but modified for my needs
+# May be useful to others 
 #
-
-# Package installations for various sections.
-# This will build a minimal XFCE Kali system with the top 10 tools.
-# This is the section to edit if you would like to add more packages.
-# See http://www.kali.org/new/kali-linux-metapackages/ for meta packages you can
-# use. You can also install packages, using just the package name, but keep in
-# mind that not all packages work on ARM! If you specify one of those, the
-# script will throw an error, but will still continue on, and create an unusable
-# image, keep that in mind.
-
-
-# This is the Raspberry Pi2 Kali ARM build script - http://www.kali.org/downloads
-# A trusted Kali Linux image created by Offensive Security - http://www.offensive-security.com
-
+# Included:
+#
+# * Geneate SSH Keys on first boot
+# * XFCE4/Bash Tweaks from G0tMi1k and others
+#       > https://github.com/g0tmi1k/os-scripts/blob/master/kali-rolling.sh
+# * Wireless packages
+# * VPN Packages
+# * MITM Packages
+# * re4son's PI TFT kernel with nexmon
+#       > re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
+#       > github: https://github.com/re4son/
+#       > nexmon: https://github.com/seemoo-lab/bcm-rpi3
+#
+#
 #################
 # MODIFY THESE  #
 #################
@@ -79,22 +76,22 @@ arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-ut
 base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus"
 desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
 xfce4="gtk3-engines-xfce xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder"
-#lxde="lxde-core lxde lightdm kali-desktop-lxde lxtask gksu netsurf-gtk zenity xdg-utils"
-tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash sqlmap usbutils winexe wireshark metasploit-framework"
+tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash  php-cli sqlmap usbutils winexe wireshark metasploit-framework"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
 wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses firmware-atheros firmware-libertas firmware-ralink firmware-realtek"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
+g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted hashid unicornscan searchsploit webshells wordlists p0f seclists cowsay msfpc exe2hexbat windows-binaries"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
 
 if [ "${BUILD_TFT}" = true ] ; then
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn} ${g0tmi1k}"
 else
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn} ${g0tmi1k}"
 fi
 
 # Archteicture for Pi3 is armhf
@@ -182,9 +179,10 @@ WantedBy=multi-user.target
 EOF
 chmod 755 kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
 
-# Tweaks
+# Copy Tweaks to tmp folder
 cp $TOPDIR/misc/xfce4-setup.sh kali-$architecture/tmp/xfce4-setup.sh
 cp $TOPDIR/misc/bashtweaks.sh kali-$architecture/tmp/bashtweaks.sh
+cp $TOPDIR/misc/firefoxtweaks.sh kali-$architecture/tmp/firefoxtweaks.sh
 
 # Create monitor mode start/remove
 cat << EOF > kali-$architecture/usr/bin/monstart
@@ -255,6 +253,10 @@ echo "[+] Running bash tweaks"
 chmod +x /tmp/bashtweaks.sh
 /tmp/bashtweaks.sh
 
+echo "[+] Running firefox tweaks"
+chmod +x /tmp/firefoxtweaks.sh
+/tmp/firefoxtweaks.sh
+
 chmod +x /usr/bin/monstart
 chmod +x /usr/bin/monstop
 
@@ -305,10 +307,6 @@ if [ "${BUILD_TFT}" = true ] ; then
     # Allow "anybody" to access to xserver.  Either console or root
     sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
     sed -i 's/allowed_users=root/allowed_users=anybody/' /etc/X11/Xwrapper.config
-
-    # Add virtual keyboard to login screen
-    echo "show-indicators=~language;~a11y;~session;~power" /etc/lightdm/lightdm-gtk-greeter.conf
-    echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
 fi
 
 # Turn off wifi power saving
@@ -318,7 +316,7 @@ echo "iwconfig wlan0 power off" >> /etc/rc.local
 echo "[+] Creating the swap file to /root"
 dd if=/dev/zero of=/var/swapfile.img bs=1M count=1024 && 
 mkswap /var/swapfile.img
-0600 /var/swapfile.img
+chmod 0600 /var/swapfile.img
 swapon /var/swapfile.img
 
 echo "exit 101" > /usr/sbin/policy-rc.d
@@ -332,7 +330,6 @@ echo "privs.warn_if_elevated: FALSE" > /root/.wireshark/recent_common
 mv -f /usr/share/wireshark/init.lua{,.disabled}
 
 ############## Extra g0tmi1k apps ###############
-apt -y -qq install ipcalc sipcalc psmisc htop gparted hashid webshells php-cli wordlists p0f seclists cowsay
 
 # Git clone webshells
 git clone -q -b master https://github.com/sensepost/reGeorg.git /opt/regeorg-git
@@ -366,7 +363,15 @@ sed -i 's/^#AuthorizedKeysFile /AuthorizedKeysFile /g' "/etc/ssh/sshd_config"  #
 apt-get install -y libssl-dev libffi-dev python-dev build-essential virtualenvwrapper
 #source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
 #mkvirtualenv CME
-pip install crackmapexec
+pip install crackmapexec  # Pip command not working
+
+# NMAP Vulscan
+mkdir -p /usr/share/nmap/scripts/vulscan/
+timeout 300 curl --progress -k -L -f "http://www.computec.ch/projekte/vulscan/download/nmap_nse_vulscan-2.0.tar.gz" > /tmp/nmap_nse_vulscan.tar.gz
+gunzip /tmp/nmap_nse_vulscan.tar.gz
+tar -xf /tmp/nmap_nse_vulscan.tar -C /usr/share/nmap/scripts/
+#--- Fix permissions (by default its 0777)
+chmod -R 0755 /usr/share/nmap/scripts/; find /usr/share/nmap/scripts/ -type f -exec chmod 0644 {} \;
 
 ############################################################
 # Add bluetooth packages from Raspberry Pi
@@ -375,6 +380,14 @@ cd /tmp
 wget https://archive.raspberrypi.org/debian/pool/main/b/bluez/bluez_5.23-2+rpi2_armhf.deb
 dpkg -i bluez_5.23-2+rpi2_armhf.deb
 apt-mark hold bluez
+
+# Add Login Screen Tweaks
+# Add virtual keyboard to login screen
+echo "show-indicators=~language;~a11y;~session;~power" > /etc/lightdm/lightdm-gtk-greeter.conf
+echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
+# Background image and change logo
+echo "background=/usr/share/images/desktop-base/kali-lockscreen_1280x1024.png" >> /etc/lightdm/lightdm-gtk-greeter.conf
+echo "default-user-image=#kali-k" >> /etc/lightdm/lightdm-gtk-greeter.conf
 
 rm -f /usr/sbin/policy-rc.d
 rm -f /usr/sbin/invoke-rc.d
@@ -404,8 +417,47 @@ EOF
 chmod +x kali-$architecture/cleanup
 LANG=C chroot kali-$architecture /cleanup
 
-# Raspbian Configs worth adding
+# Make login screen kali
+cat << EOF > kali-$architecture/etc/lightdm/lightdm-gtk-greeter.conf
+s
+EOF
 
+# TMUX Settings
+cat << EOF > kali-$architecture/root/.tmux.conf
+#-Settings---------------------------------------------------------------------
+## Make it like screen (use CTRL+a)
+unbind C-b
+set -g prefix C-a
+## Pane switching (SHIFT+ARROWS)
+bind-key -n S-Left select-pane -L
+bind-key -n S-Right select-pane -R
+bind-key -n S-Up select-pane -U
+bind-key -n S-Down select-pane -D
+## Windows switching (ALT+ARROWS)
+bind-key -n M-Left  previous-window
+bind-key -n M-Right next-window
+## Windows re-ording (SHIFT+ALT+ARROWS)
+bind-key -n M-S-Left swap-window -t -1
+bind-key -n M-S-Right swap-window -t +1
+## Activity Monitoring
+setw -g monitor-activity on
+set -g visual-activity on
+## Set defaults
+set -g default-terminal screen-256color
+set -g history-limit 5000
+## Default windows titles
+set -g set-titles on
+set -g set-titles-string '#(whoami)@#H - #I:#W'
+## Last window switch
+bind-key C-a last-window
+## Reload settings (CTRL+a -> r)
+unbind r
+bind r source-file /etc/tmux.conf
+## Load custom sources
+#source ~/.bashrc   #(issues if you use /bin/bash & Debian)
+EOF
+
+# Raspbian Configs worth adding
 cat << EOF > kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf 
 country=GB
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
@@ -413,17 +465,9 @@ update_config=1
 EOF
 chmod 600 kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf
 
-#cat << EOF > kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
-#[Service]
-#ExecStart=
-#ExecStart=/sbin/dhcpcd -q -w
-#EOF
-#chmod 644 kali-$architecture/etc/systemd/system/dhcpcd.service.d/wait.conf
-
 cat << EOF > kali-$architecture/etc/apt/apt.conf.d/50raspi
 # never use pdiffs. Current implementation is very slow on low-powered devices
 Acquire::PDiffs "0";
-
 # download up to 5 pdiffs:
 #Acquire::PDiffs::FileLimit "5";
 EOF
