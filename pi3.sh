@@ -86,7 +86,7 @@ mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
 wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses firmware-atheros firmware-libertas firmware-ralink firmware-realtek"
-vpn="network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
+vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
@@ -166,35 +166,6 @@ console-common console-data/keymap/policy select Select keymap from full list
 console-common console-data/keymap/full select en-latin1-nodeadkeys
 EOF
 
-cat << EOF > kali-$architecture/etc/init.d/resize2fs_once
-#!/bin/sh
-### BEGIN INIT INFO
-# Provides:          resize2fs_once
-# Required-Start:
-# Required-Stop:
-# Default-Start: 3
-# Default-Stop:
-# Short-Description: Resize the root filesystem to fill partition
-# Description:
-### END INIT INFO
-. /lib/lsb/init-functions
-case "$1" in
-  start)
-    log_daemon_msg "Starting resize2fs_once"
-    ROOT_DEV=`grep -Eo 'root=[[:graph:]]+' /proc/cmdline | cut -d '=' -f 2-` &&
-    resize2fs $ROOT_DEV &&
-    update-rc.d resize2fs_once remove &&
-    rm /etc/init.d/resize2fs_once &&
-    log_end_msg $?
-    ;;
-  *)
-    echo "Usage: $0 start" >&2
-    exit 3
-    ;;
-esac
-EOF
-chmod 755 kali-$architecture/etc/init.d/resize2fs_once
-
 cat << EOF > kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
 #
 [Unit]
@@ -209,7 +180,7 @@ ExecStartPost=/bin/rm /lib/systemd/system/regenerate_ssh_host_keys.service ; /us
 [Install]
 WantedBy=multi-user.target
 EOF
-chmod 644 kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
+chmod 755 kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
 
 # Tweaks
 cp $TOPDIR/misc/xfce4-setup.sh kali-$architecture/tmp/xfce4-setup.sh
@@ -223,17 +194,18 @@ ifconfig wlan0 down
 rmmod brcmfmac
 echo "Copying modified firmware"
 cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcmfmac43430-sdio.bin && insmod /root/brcmfmac.ko
-echo "Bringing wlan0"
-ifconfig wlan0 up
 EOF
 
 cat << EOF > kali-$architecture/usr/bin/monstop
 #!/bin/bash
-echo "Brining interface down"
+echo "Brining interface wlan0 down"
 ifconfig wlan0 down
 rmmod brcmfmac
 echo "Copying original firmware"
-cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcmfmac43430-sdio.bin && modprobe brcmfmac
+cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcmfmac43430-sdio.bin
+sleep 1
+echo "Reloading brcmfmac"
+modprobe brcmfmac
 EOF
 
 echo "[+] Begin THIRD STAGE"
@@ -265,7 +237,6 @@ apt-get --yes --force-yes dist-upgrade
 apt-get --yes --force-yes autoremove
 
 systemctl enable regenerate_ssh_host_keys
-systemctl enable resize2fs_once
 
 rm -f /etc/ssh/ssh_host_*_key*
 
@@ -274,18 +245,6 @@ rm -f /etc/ssh/ssh_host_*_key*
 echo "[+] Making root great again"
 sed -i -e 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
 update-rc.d ssh enable
-
-# Add user "pi"
-echo "[+] Creating pi user with password raspberry"
-useradd -m pi -s /bin/bash
-usermod -a -G sudo,kismet,pi pi
-echo "pi:raspberry" | chpasswd
-chown -R pi:pi /home/pi
-echo "pi ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers 
-
-# Enable autologin for user pi
-mkdir -p /etc/lightdm/lightdm.conf.d/
-echo "[SeatDefaults]\nautologin-user=pi" > /etc/lightdm/lightdm.conf.d/12-autologin.conf
 
 # XFCE stuff (both users?)
 echo "[+] Running XFCE setup"
@@ -301,6 +260,16 @@ chmod +x /usr/bin/monstop
 
 # FOR TFT DISPLAYS
 if [ "${BUILD_TFT}" = true ] ; then
+
+    # Add user "pi"
+    echo "[+] Creating pi user"
+    useradd -m pi -s /bin/bash
+    group add pi
+    usermod -a -G sudo,kismet,pi pi
+    echo "pi:raspberry" | chpasswd
+    chown -R pi:pi /home/pi
+    echo "pi ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
     # Later version of xserver-org-input-libinput kill touch screen! Get last working version and hold!
     cd /tmp
     apt-get -y purge xserver-xorg-input-libinput
@@ -346,6 +315,12 @@ fi
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
 echo "iwconfig wlan0 power off" >> /etc/rc.local
 
+echo "[+] Creating the swap file to /root"
+dd if=/dev/zero of=/var/swapfile.img bs=1M count=1024 && 
+mkswap /var/swapfile.img
+0600 /var/swapfile.img
+swapon /var/swapfile.img
+
 echo "exit 101" > /usr/sbin/policy-rc.d
 chmod 744 /usr/sbin/policy-rc.d
 
@@ -357,13 +332,12 @@ echo "privs.warn_if_elevated: FALSE" > /root/.wireshark/recent_common
 mv -f /usr/share/wireshark/init.lua{,.disabled}
 
 ############## Extra g0tmi1k apps ###############
-apt -y -qq install ipcalc sipcalc psmisc htop gparted hashid webshells php-cli wordlists p0f seclists cowsay shutter
+apt -y -qq install ipcalc sipcalc psmisc htop gparted hashid webshells php-cli wordlists p0f seclists cowsay
 
 # Git clone webshells
 git clone -q -b master https://github.com/sensepost/reGeorg.git /opt/regeorg-git
 git clone -q -b master https://github.com/b374k/b374k.git /opt/b374k-git
 git clone -q -b master https://github.com/vrana/adminer.git /opt/adminer-git
-git clone -q -b master https://github.com/binkybear/rock3tman.git /opt/rock3tman-git
 
 # Generate shells
 pushd /opt/b374k-git/ >/dev/null
@@ -649,7 +623,7 @@ cat << EOF > ${basedir}/root/etc/fstab
 proc /proc proc nodev,noexec,nosuid 0  0
 /dev/mmcblk0p2  / ext4 errors=remount-ro 0 1
 # Change this if you add a swap partition or file
-#/var/swapfile none swap sw 0 0
+/var/swapfile none swap sw 0 0
 /dev/mmcblk0p1 /boot vfat noauto 0 0
 EOF
 
@@ -755,9 +729,8 @@ dtparam=audio=on
 EOF
 
     # Copy firmware for nexmon
-    echo "[+] Copying wifi firmware"
+    echo "[+] Copying wifi firmware related file brcmfmac43430-sdio.txt"
     mkdir -p $dir/lib/firmware/brcm/
-    #cp -rf $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/lib/firmware/brcm/   # This is copied in nexmon build now
     cp -rf $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/lib/firmware/brcm/
 
     echo "[+] Copying bt firmware"
@@ -766,9 +739,6 @@ EOF
 
     echo "[+] Creating backup wifi firmware in /root"
     cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/root
-    #cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/root
-    #cp -f $TOPDIR/nexmon/brcmfmac.ko $dir/root
-    #cp -f $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/root
 
     echo "[+] Copy Zram"
     cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
@@ -787,6 +757,7 @@ EOF
     fi
 
     echo "[+] Unmounting"
+    sleep 10
     sudo umount $dir/boot
     sudo umount -l $dir/proc
     sudo umount -l $dir/dev/
