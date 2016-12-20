@@ -2,3 +2,4 @@
 *.xz
 rpi2-kali
 kali-armhf
+gcc-arm-linux-gnueabihf-4.7

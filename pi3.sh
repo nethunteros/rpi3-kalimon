@@ -58,6 +58,9 @@ DIRECTORY=`pwd`/kali-$architecture  # CHROOT FS FOLDER
 TOPDIR=`pwd`                        # CURRENT FOLDER
 VERSION=$1
 
+# TOOLCHAIN
+export PATH=${PATH}:`pwd`/gcc-arm-linux-gnueabihf-4.7/bin
+
 # BUILD THE KALI FILESYSTEM
 
 function build_chroot(){
@@ -75,15 +78,15 @@ fi
 arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-utils"
 base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus"
 desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
-xfce4="gtk3-engines-xfce xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder"
+xfce4="gtk3-engines-xfce lightdm-gtk-greeter-settings xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder"
 tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash  php-cli sqlmap usbutils winexe wireshark metasploit-framework"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
-extras="unzip curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
+extras="unzip unrar curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
 wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses firmware-atheros firmware-libertas firmware-ralink firmware-realtek"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
-g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted hashid unicornscan searchsploit webshells wordlists p0f seclists cowsay msfpc exe2hexbat windows-binaries"
+g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid unicornscan webshells wordlists p0f seclists cowsay msfpc exe2hexbat windows-binaries"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
@@ -182,7 +185,6 @@ chmod 755 kali-$architecture/lib/systemd/system/regenerate_ssh_host_keys.service
 # Copy Tweaks to tmp folder
 cp $TOPDIR/misc/xfce4-setup.sh kali-$architecture/tmp/xfce4-setup.sh
 cp $TOPDIR/misc/bashtweaks.sh kali-$architecture/tmp/bashtweaks.sh
-cp $TOPDIR/misc/firefoxtweaks.sh kali-$architecture/tmp/firefoxtweaks.sh
 
 # Create monitor mode start/remove
 cat << EOF > kali-$architecture/usr/bin/monstart
@@ -253,71 +255,18 @@ echo "[+] Running bash tweaks"
 chmod +x /tmp/bashtweaks.sh
 /tmp/bashtweaks.sh
 
-echo "[+] Running firefox tweaks"
-chmod +x /tmp/firefoxtweaks.sh
-/tmp/firefoxtweaks.sh
-
 chmod +x /usr/bin/monstart
 chmod +x /usr/bin/monstop
-
-# FOR TFT DISPLAYS
-if [ "${BUILD_TFT}" = true ] ; then
-
-    # Add user "pi"
-    echo "[+] Creating pi user"
-    useradd -m pi -s /bin/bash
-    group add pi
-    usermod -a -G sudo,kismet,pi pi
-    echo "pi:raspberry" | chpasswd
-    chown -R pi:pi /home/pi
-    echo "pi ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-
-    # Later version of xserver-org-input-libinput kill touch screen! Get last working version and hold!
-    cd /tmp
-    apt-get -y purge xserver-xorg-input-libinput
-    wget http://http.kali.org/pool/main/x/xserver-xorg-input-libinput/xserver-xorg-input-libinput_0.19.0-1_armhf.deb
-    dpkg -i xserver-xorg-input-libinput_0.19.0-1_armhf.deb
-    apt-mark hold xserver-xorg-input-libinput
-    rm -f xserver-xorg-input-libinput_0.19.0-1_armhf.deb
-        
-    # Install SDR-Scanner
-    cd /home/pi
-    git clone git://git.osmocom.org/rtl-sdr.git
-    cd rtl-sdr
-    mkdir build
-    cd build
-    cmake ../ -DINSTALL_UDEV_RULES=ON -DDETACH_KERNEL_DRIVER=ON
-    make
-    sudo make install
-    sudo ldconfig
-    sudo pip install pyrtlsdr
-    cd /home/pi
-    git clone https://github.com/adafruit/FreqShow.git
-
-    # PiTFT Touch menu
-    cd /home/pi
-    sudo pip install RPi.GPIO
-    git clone https://github.com/Re4son/pitftmenu -b 3.5-MSF # Default to 3.5 size screens
-    echo '%pi ALL=(ALL:ALL) NOPASSWD: /sbin/poweroff, /sbin/reboot, /sbin/shutdown, /home/pi/pitftmenu/menu' >> /etc/sudoers
-    echo "/usr/bin/clear"  >> /home/pi/.profile
-    echo 'sudo /home/pi/pitftmenu/menu' >> /home/pi/.profile
-
-    chown -R pi:pi /home/pi
-
-    # Allow "anybody" to access to xserver.  Either console or root
-    sed -i 's/allowed_users=console/allowed_users=anybody/' /etc/X11/Xwrapper.config
-    sed -i 's/allowed_users=root/allowed_users=anybody/' /etc/X11/Xwrapper.config
-fi
 
 # Turn off wifi power saving
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
 echo "iwconfig wlan0 power off" >> /etc/rc.local
 
-echo "[+] Creating the swap file to /root"
-dd if=/dev/zero of=/var/swapfile.img bs=1M count=1024 && 
-mkswap /var/swapfile.img
-chmod 0600 /var/swapfile.img
-swapon /var/swapfile.img
+#echo "[+] Creating the swap file to /root"
+#dd if=/dev/zero of=/var/swapfile.img bs=1M count=1024 && 
+#chmod 0600 /var/swapfile.img
+#mkswap /var/swapfile.img
+#swapon /var/swapfile.img
 
 echo "exit 101" > /usr/sbin/policy-rc.d
 chmod 744 /usr/sbin/policy-rc.d
@@ -350,20 +299,31 @@ popd >/dev/null
 # Symlink webshells
 ln -sf /opt/reGeorg-git /usr/share/webshells/reGeorg
 ln -sf /opt/b374k-git /usr/share/webshells/php/b374k
-file=$(find /opt/adminer-git/ -name adminer-*.php -type f -print -quit)
-ln -sf "${file}" /usr/share/webshells/php/adminer.php
+adminer=$(find /opt/adminer-git/ -name adminer-*.php -type f -print -quit)
+ln -sf "${adminer}" /usr/share/webshells/php/adminer.php
+
+# Proxychains-ng
+git clone -q -b master https://github.com/rofl0r/proxychains-ng.git /opt/proxychains-ng-git/
+pushd /opt/proxychains-ng-git/ >/dev/null
+git pull -q
+make -s clean
+./configure --prefix=/usr --sysconfdir=/etc >/dev/null
+make -s 2>/dev/null && make -s install
+popd >/dev/null
+mkdir -p /usr/local/bin/
+ln -sf /usr/bin/proxychains4 /usr/local/bin/proxychains-ng
+
+# PSExec
+timeout 300 curl --progress -k -L -f "https://download.sysinternals.com/files/PSTools.zip" > /tmp/pstools.zip
+timeout 300 curl --progress -k -L -f "http://www.coresecurity.com/system/files/pshtoolkit_v1.4.rar" > /tmp/pshtoolkit.rar \
+unzip -q -o -d /usr/share/windows-binaries/pstools/ /tmp/pstools.zip
+unrar x -y /tmp/pshtoolkit.rar /usr/share/windows-binaries/ >/dev/null
 
 # Fun MOTD
 echo "Moo" | /usr/games/cowsay > /etc/motd
 
 # SSH Allow authorized keys
 sed -i 's/^#AuthorizedKeysFile /AuthorizedKeysFile /g' "/etc/ssh/sshd_config"  # Allow for key based login
-
-# Crackmapexec
-apt-get install -y libssl-dev libffi-dev python-dev build-essential virtualenvwrapper
-#source /usr/share/virtualenvwrapper/virtualenvwrapper.sh
-#mkvirtualenv CME
-pip install crackmapexec  # Pip command not working
 
 # NMAP Vulscan
 mkdir -p /usr/share/nmap/scripts/vulscan/
@@ -417,9 +377,15 @@ EOF
 chmod +x kali-$architecture/cleanup
 LANG=C chroot kali-$architecture /cleanup
 
-# Make login screen kali
-cat << EOF > kali-$architecture/etc/lightdm/lightdm-gtk-greeter.conf
-s
+# Bupsuite
+mkdir -p kali-$architecture/root/.java/.userPrefs/burp/
+cat << EOF > kali-$architecture/root/.java/.userPrefs/burp/prefs.xml
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE map SYSTEM "http://java.sun.com/dtd/preferences.dtd" >
+<map MAP_XML_VERSION="1.0">
+  <entry key="eulafree" value="2"/>
+  <entry key="free.suite.feedbackReportingEnabled" value="false"/>
+</map>
 EOF
 
 # TMUX Settings
@@ -458,12 +424,12 @@ bind r source-file /etc/tmux.conf
 EOF
 
 # Raspbian Configs worth adding
-cat << EOF > kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf 
-country=GB
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-update_config=1
-EOF
-chmod 600 kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf
+#cat << EOF > kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf 
+#country=GB
+#ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+#update_config=1
+#EOF
+#chmod 600 kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf
 
 cat << EOF > kali-$architecture/etc/apt/apt.conf.d/50raspi
 # never use pdiffs. Current implementation is very slow on low-powered devices
@@ -576,28 +542,6 @@ deb http://http.kali.org/kali kali-rolling main contrib non-free
 #deb-src http://http.kali.org/kali kali-rolling main non-free contrib
 EOF
 
-
-# Kernel section. If you want to use a custom kernel, or configuration, replace
-# them in this section.
-# Old way
-# git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
-# cd ${basedir}/root/usr/src/kernel
-export ARCH=arm
-export CROSS_COMPILE=arm-linux-gnueabihf-
-
-# RPI Firmware (copy to /boot)
-echo "[+] Copying Raspberry Pi Firmware to /boot"
-git clone --depth 1 https://github.com/raspberrypi/firmware.git rpi-firmware
-cp -rf rpi-firmware/boot/* ${basedir}/bootp/
-rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
-rm -rf rpi-firmware
-
-# Linux Firmware (copy to /lib)
-echo "[+] Copying Linux Firmware to /lib"
-cd ${basedir}/root/lib
-git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git firmware
-rm -rf ${basedir}/root/lib/firmware/.git
-
 # Make nexmon and kernel
 echo "*********************************************"
 echo "
@@ -622,58 +566,64 @@ _____  \
   #            #
   $(tput sgr0)"
 echo "*********************************************"
-cd $TOPDIR/bcm-rpi3/
-source setup_env.sh 
-cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
-make
+# Kernel and firmware
+git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
+git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git ${basedir}/root/lib/firmware
+git clone --depth 1 https://github.com/raspberrypi/firmware.git ${basedir}/root/tmp/rpi-firmware
 
-# Copy nexmon firmware and module to /root
-echo "[+] Copying nexmon firmware and module"
-cp brcmfmac43430-sdio.bin ${basedir}/root/root/
-cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
+# This is the kernel creation script
+cat << EOF > ${basedir}/root/tmp/buildkernel.sh
+cd /usr/src/kernel
+export ARCH=arm
+export CROSS_COMPILE=arm-linux-gnueabihf-
+export KERNEL=kernel7
 
-# Stick with original firmware so wifi works out of the box
-cp $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin ${basedir}/root/lib/firmware/brcm/
+# RPI Firmware (copy to /boot)
+echo "[+] Copying Raspberry Pi Firmware to /boot"
+cp -rf /tmp/rpi-firmware/boot/* /boot/
+rm -rf /tmp/rpi-firmware
+
+# Linux Firmware (copy to /lib)
+echo "[+] Copying Linux Firmware to /lib"
+rm -rf /lib/firmware  # Remove /lib/firmware to copy linux firmware
+cd /lib
+rm -rf /lib/firmware/.git
 
 echo "[+] Moving to kernel folder and making modules"
-cd $TOPDIR/bcm-rpi3/kernel/
-make modules_install INSTALL_MOD_PATH=${basedir}/root
+cd /usr/src/kernel
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j4 zImage modules dtbs
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules_install
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install
 
 echo "[+] Copying kernel"
 # ARGH.  Device tree support requires we run this *sigh*
-perl scripts/mkknlimg --dtok arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
+perl scripts/mkknlimg --dtok arch/arm/boot/zImage /boot/kernel7.img
 #cp arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
-cp arch/arm/boot/dts/*.dtb ${basedir}/bootp/
-cp arch/arm/boot/dts/overlays/*.dtb* ${basedir}/bootp/overlays/
-cp arch/arm/boot/dts/overlays/README ${basedir}/bootp/overlays/
+cp arch/arm/boot/dts/*.dtb /boot/
+cp arch/arm/boot/dts/overlays/*.dtb* /boot/overlays/
+cp arch/arm/boot/dts/overlays/README /boot/overlays/
 
 echo "[+] Creating and copying modules"
-make INSTALL_MOD_PATH=${basedir}/root firmware_install 
+make firmware_install 
 make mrproper
 cp arch/arm/configs/re4son_pi2_defconfig .config
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make modules_prepare
+make modules_prepare &&
 
-
-# Create cmdline.txt file
-cat << EOF > ${basedir}/bootp/cmdline.txt
-dwc_otg.fiq_fix_enable=2 console=ttyAMA0,115200 kgdboc=ttyAMA0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rootflags=noload net.ifnames=0
+echo "[+] Starting nexmon build"
+cd /opt && git clone https://github.com/nethunteros/nexmon.git --depth 1
+ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
+cd /opt/nexmon/ && source setup_env.sh && cd patches/bcm43438/7_45_41_26/nexmon/ && make
+echo "[+] Nexmon build completed"
 EOF
-
-# systemd doesn't seem to be generating the fstab properly for some people, so
-# let's create one.
-cat << EOF > ${basedir}/root/etc/fstab
-# <file system> <mount point>   <type>  <options>       <dump>  <pass>
-proc /proc proc nodev,noexec,nosuid 0  0
-/dev/mmcblk0p2  / ext4 errors=remount-ro 0 1
-# Change this if you add a swap partition or file
-/var/swapfile none swap sw 0 0
-/dev/mmcblk0p1 /boot vfat noauto 0 0
-EOF
+chmod +x ${basedir}/root/tmp/buildkernel.sh
 
 # Unmount partitions
-umount $bootp
-umount $rootp
+echo "[+] Unmounting root and boot"
+sleep 10
+umount -l $bootp
+umount -l $rootp
 kpartx -dv $loopdevice
 losetup -d $loopdevice
 
@@ -713,6 +663,12 @@ if [ -f "${OUTPUTFILE}" ]; then
     cp /usr/bin/qemu-arm-static $dir/usr/bin/
     chmod +755 $dir/usr/bin/qemu-arm-static
 
+    echo "[+] Building kernel & nexmon"
+    chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
+    chroot $dir /bin/bash -c "/tmp/buildkernel.sh"
+    rm -f $dir/tmp/buildkernel.sh
+
+echo "[+] Creating /boot/config.txt"
 cat << EOF > $dir/boot/config.txt
 # For more options and information see
 # http://www.raspberrypi.org/documentation/configuration/config-txt.md
@@ -772,10 +728,40 @@ cat << EOF > $dir/boot/config.txt
 dtparam=audio=on
 EOF
 
+    # Create cmdline.txt file
+    echo "[+] Creating /boot/cmdline.txt"
+cat << EOF > $dir/boot/cmdline.txt
+dwc_otg.fiq_fix_enable=2 console=ttyAMA0,115200 kgdboc=ttyAMA0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rootflags=noload net.ifnames=0
+EOF
+
+    # systemd doesn't seem to be generating the fstab properly for some people, so
+    # let's create one.
+    echo "[+] Creating /etc/fstab"
+cat << EOF > $dir/etc/fstab
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+proc /proc proc nodev,noexec,nosuid 0  0
+/dev/mmcblk0p2  / ext4 errors=remount-ro 0 1
+# Change this if you add a swap partition or file
+#/var/swapfile none swap sw 0 0
+/dev/mmcblk0p1 /boot vfat noauto 0 0
+EOF
+
     # Copy firmware for nexmon
     echo "[+] Copying wifi firmware related file brcmfmac43430-sdio.txt"
     mkdir -p $dir/lib/firmware/brcm/
     cp -rf $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/lib/firmware/brcm/
+
+    # Copy nexmon firmware and module to /root
+    echo "[+] Copying nexmon firmware and module"
+    cp $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/root/
+    #cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
+
+    # Stick with original firmware so wifi works out of the box
+    cp $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/lib/firmware/brcm/
+
+    echo "[+] Copy Zram"
+    cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
+    chmod +x $dir/etc/init.d/zram
 
     echo "[+] Copying bt firmware"
     cp -f $TOPDIR/misc/bt/99-com.rules $dir/etc/udev/rules.d/99-com.rules
@@ -783,10 +769,6 @@ EOF
 
     echo "[+] Creating backup wifi firmware in /root"
     cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/root
-
-    echo "[+] Copy Zram"
-    cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
-    chmod +x $dir/etc/init.d/zram
 
     echo "[+] Setting up for future TFT build"
     wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/adafruit-pitft-touch-cal -O $dir/root/adafruit-pitft-touch-cal
