@@ -568,58 +568,61 @@ _____  \
 echo "*********************************************"
 # Kernel and firmware
 git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
-git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git ${basedir}/root/lib/firmware
-git clone --depth 1 https://github.com/raspberrypi/firmware.git ${basedir}/root/tmp/rpi-firmware
-git clone --depth 1 https://github.com/raspberrypi/tools ${basedir}/root/tmp/tools
 
-# This is the kernel creation script
-cat << EOF > ${basedir}/root/tmp/buildkernel.sh
-cd /usr/src/kernel
-export PATH=$PATH:/tmp/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin
+rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
+git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git ${basedir}/root/lib/firmware
+rm -rf ${basedir}/root/lib/firmware/.git
+
+git clone --depth 1 https://github.com/raspberrypi/firmware.git ${basedir}/root/tmp/rpi-firmware
+git clone --depth 1 https://github.com/nethunteros/nexmon.git ${basedir}/root/opt/nexmon
+
+# EXPORTS
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 export KERNEL=kernel7
 
 # RPI Firmware (copy to /boot)
 echo "[+] Copying Raspberry Pi Firmware to /boot"
-cp -rf /tmp/rpi-firmware/boot/* /boot/
-rm -rf /tmp/rpi-firmware
-
-# Linux Firmware (copy to /lib)
-echo "[+] Copying Linux Firmware to /lib"
-rm -rf /lib/firmware  # Remove /lib/firmware to copy linux firmware
-cd /lib
-rm -rf /lib/firmware/.git
+cp -rf ${basedir}/root/tmp/rpi-firmware/boot/* ${basedir}/bootp/
+rm -rf ${basedir}/root/tmp/rpi-firmware
 
 echo "[+] Moving to kernel folder and making modules"
-cd /usr/src/kernel
+cd ${basedir}/root/usr/src/kernel
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j4 zImage modules dtbs
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules_install
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j $(grep -c processor /proc/cpuinfo) zImage modules dtbs
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules_install INSTALL_MOD_PATH=${basedir}/root
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install INSTALL_MOD_PATH=${basedir}/root
 
 echo "[+] Copying kernel"
 # ARGH.  Device tree support requires we run this *sigh*
-perl scripts/mkknlimg --dtok arch/arm/boot/zImage /boot/kernel7.img
+perl scripts/mkknlimg --dtok arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
 #cp arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
-cp arch/arm/boot/dts/*.dtb /boot/
-cp arch/arm/boot/dts/overlays/*.dtb* /boot/overlays/
-cp arch/arm/boot/dts/overlays/README /boot/overlays/
+cp arch/arm/boot/dts/*.dtb ${basedir}/bootp/
+cp arch/arm/boot/dts/overlays/*.dtb* ${basedir}/bootp/overlays/
+cp arch/arm/boot/dts/overlays/README ${basedir}/bootp/overlays/
 
 echo "[+] Creating and copying modules"
-make firmware_install 
+make firmware_install INSTALL_MOD_PATH=${basedir}/root
 make mrproper
 cp arch/arm/configs/re4son_pi2_defconfig .config
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
 make modules_prepare &&
 
+cat << EOF > ${basedir}/root/tmp/buildnexmon.sh
 echo "[+] Starting nexmon build"
-cd /opt && git clone https://github.com/nethunteros/nexmon.git --depth 1
+# make scripts doesn't work if we cross crompile
+cd /usr/src/kernel
+make scripts
+# Symlink is broken since we build outside of device (will pint to host system)
+rm -rf /lib/modules/4.4.33-v7_Re4son-Kali-Pi-TFT+/build
+ln -s /usr/src/kernel /lib/modules/4.4.33-v7_Re4son-Kali-Pi-TFT+/build
 ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
+# Start nexmon build
 cd /opt/nexmon/ && source setup_env.sh && cd patches/bcm43438/7_45_41_26/nexmon/ && make
+cp brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
 echo "[+] Nexmon build completed"
 EOF
-chmod +x ${basedir}/root/tmp/buildkernel.sh
+chmod +x ${basedir}/root/tmp/buildnexmon.sh
 
 # Unmount partitions
 echo "[+] Unmounting root and boot"
@@ -633,11 +636,8 @@ losetup -d $loopdevice
 # Comment this out to keep things around if you want to see what may have gone
 # wrong.
 echo "Cleaning up the temporary build files..."
-rm -rf ${basedir}/kernel
 rm -rf ${basedir}/bootp
 rm -rf ${basedir}/root
-rm -rf ${basedir}/boot
-rm -rf ${basedir}/patches
 
 # If you're building an image for yourself, comment all of this out, as you
 # don't need the sha1sum or to compress the image, since you will be testing it
@@ -667,8 +667,8 @@ if [ -f "${OUTPUTFILE}" ]; then
 
     echo "[+] Building kernel & nexmon"
     chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
-    chroot $dir /bin/bash -c "/tmp/buildkernel.sh"
-    rm -f $dir/tmp/buildkernel.sh
+    chroot $dir /bin/bash -c "/tmp/buildnexmon.sh"
+    rm -f $dir/tmp/*
 
 echo "[+] Creating /boot/config.txt"
 cat << EOF > $dir/boot/config.txt
