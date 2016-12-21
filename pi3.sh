@@ -570,10 +570,12 @@ echo "*********************************************"
 git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
 git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git ${basedir}/root/lib/firmware
 git clone --depth 1 https://github.com/raspberrypi/firmware.git ${basedir}/root/tmp/rpi-firmware
+git clone --depth 1 https://github.com/raspberrypi/tools ${basedir}/root/tmp/tools
 
 # This is the kernel creation script
 cat << EOF > ${basedir}/root/tmp/buildkernel.sh
 cd /usr/src/kernel
+export PATH=$PATH:/tmp/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/bin
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 export KERNEL=kernel7
