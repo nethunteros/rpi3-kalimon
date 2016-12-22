@@ -79,14 +79,14 @@ arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-ut
 base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus"
 desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
 xfce4="gtk3-engines-xfce lightdm-gtk-greeter-settings xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder"
-tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash  php-cli sqlmap usbutils winexe wireshark metasploit-framework"
+tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash  php-cli sqlmap usbutils winexe wireshark"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip unrar curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
-wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses firmware-atheros firmware-libertas firmware-ralink firmware-realtek"
+wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
-g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid unicornscan webshells wordlists p0f seclists cowsay msfpc exe2hexbat windows-binaries"
+g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid unicornscan webshells wordlists p0f cowsay msfpc exe2hexbat windows-binaries"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
@@ -349,6 +349,13 @@ echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
 echo "background=/usr/share/images/desktop-base/kali-lockscreen_1280x1024.png" >> /etc/lightdm/lightdm-gtk-greeter.conf
 echo "default-user-image=#kali-k" >> /etc/lightdm/lightdm-gtk-greeter.conf
 
+# Raspi-config install
+apt-get install -y libnewt0.52 whiptail parted triggerhappy lua5.1 alsa-utils
+apt-get install -fy
+cd /tmp
+wget http://archive.raspberrypi.org/debian/pool/main/r/raspi-config/raspi-config_20161207_all.deb
+dpkg -i raspi-config_*
+
 rm -f /usr/sbin/policy-rc.d
 rm -f /usr/sbin/invoke-rc.d
 dpkg-divert --remove --rename /usr/sbin/invoke-rc.d
@@ -589,7 +596,7 @@ rm -rf ${basedir}/root/tmp/rpi-firmware
 echo "[+] Moving to kernel folder and making modules"
 cd ${basedir}/root/usr/src/kernel
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j $(grep -c processor /proc/cpuinfo) zImage modules dtbs
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(grep -c processor /proc/cpuinfo) zImage modules dtbs
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules_install INSTALL_MOD_PATH=${basedir}/root
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install INSTALL_MOD_PATH=${basedir}/root
 
@@ -607,22 +614,6 @@ make mrproper
 cp arch/arm/configs/re4son_pi2_defconfig .config
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
 make modules_prepare &&
-
-cat << EOF > ${basedir}/root/tmp/buildnexmon.sh
-echo "[+] Starting nexmon build"
-# make scripts doesn't work if we cross crompile
-cd /usr/src/kernel
-make scripts
-# Symlink is broken since we build outside of device (will pint to host system)
-rm -rf /lib/modules/4.4.33-v7_Re4son-Kali-Pi-TFT+/build
-ln -s /usr/src/kernel /lib/modules/4.4.33-v7_Re4son-Kali-Pi-TFT+/build
-ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
-# Start nexmon build
-cd /opt/nexmon/ && source setup_env.sh && cd patches/bcm43438/7_45_41_26/nexmon/ && make
-cp brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
-echo "[+] Nexmon build completed"
-EOF
-chmod +x ${basedir}/root/tmp/buildnexmon.sh
 
 # Unmount partitions
 echo "[+] Unmounting root and boot"
@@ -665,9 +656,27 @@ if [ -f "${OUTPUTFILE}" ]; then
     cp /usr/bin/qemu-arm-static $dir/usr/bin/
     chmod +755 $dir/usr/bin/qemu-arm-static
 
+cat << EOF > $dir/tmp/buildnexmon.sh
+echo "[+] Starting nexmon build"
+# make scripts doesn't work if we cross crompile
+cd /usr/src/kernel
+make scripts
+# Symlink is broken since we build outside of device (will pint to host system)
+rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
+# Start nexmon build
+cd /opt/nexmon/ && source setup_env.sh && cd patches/bcm43438/7_45_41_26/nexmon/ && make
+cp brcmfmac43430-sdio.bin /root/brcmfmac43430-sdio.bin
+cp brcmfmac/brcmfmac.ko /root
+echo "[+] Nexmon build completed"
+EOF
+chmod +x $dir/root/tmp/buildnexmon.sh
+
     echo "[+] Building kernel & nexmon"
     chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
-    chroot $dir /bin/bash -c "/tmp/buildnexmon.sh"
+    chroot $dir /bin/bash -c "cat /tmp/buildnexmon.sh"
+    chroot $dir /bin/bash -c "chmod +x /tmp/buildnexmon.sh && /tmp/buildnexmon.sh"
     rm -f $dir/tmp/*
 
 echo "[+] Creating /boot/config.txt"
