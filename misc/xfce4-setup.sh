@@ -8,8 +8,6 @@
 export DISPLAY=:0.0
 export $(dbus-launch) # Oh Lawd! Save me DeBus!
 
-mkdir -p /home/pi/.config/xfce4/panel/launcher-{2,4,5,6,7,8,9}/
-mkdir -p /home/pi/.config/xfce4/xfconf/xfce-perchannel-xml/
 mkdir -p /root/.config/xfce4/panel/launcher-{2,4,5,6,7,8,9}/
 mkdir -p /root/.config/xfce4/xfconf/xfce-perchannel-xml/
 
@@ -94,21 +92,12 @@ cat << EOF > /root/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-keyboard-short
   </property>
 </channel>
 EOF
-cp /root/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-keyboard-shortcuts.xml /home/pi/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-keyboard-shortcuts.xml
-
 ln -sf /usr/share/applications/exo-terminal-emulator.desktop /root/.config/xfce4/panel/launcher-2/exo-terminal-emulator.desktop
 ln -sf /usr/share/applications/kali-wireshark.desktop        /root/.config/xfce4/panel/launcher-4/kali-wireshark.desktop
 ln -sf /usr/share/applications/firefox-esr.desktop           /root/.config/xfce4/panel/launcher-5/firefox-esr.desktop
 ln -sf /usr/share/applications/kali-burpsuite.desktop        /root/.config/xfce4/panel/launcher-6/kali-burpsuite.desktop
 ln -sf /usr/share/applications/kali-msfconsole.desktop       /root/.config/xfce4/panel/launcher-7/kali-msfconsole.desktop
 ln -sf /usr/share/applications/xfce4-appfinder.desktop       /root/.config/xfce4/panel/launcher-8/xfce4-appfinder.desktop
-
-ln -sf /usr/share/applications/exo-terminal-emulator.desktop /home/pi/.config/xfce4/panel/launcher-2/exo-terminal-emulator.desktop
-ln -sf /usr/share/applications/kali-wireshark.desktop        /home/pi/.config/xfce4/panel/launcher-4/kali-wireshark.desktop
-ln -sf /usr/share/applications/firefox-esr.desktop           /home/pi/.config/xfce4/panel/launcher-5/firefox-esr.desktop
-ln -sf /usr/share/applications/kali-burpsuite.desktop        /home/pi/.config/xfce4/panel/launcher-6/kali-burpsuite.desktop
-ln -sf /usr/share/applications/kali-msfconsole.desktop       /home/pi/.config/xfce4/panel/launcher-7/kali-msfconsole.desktop
-ln -sf /usr/share/applications/xfce4-appfinder.desktop       /home/pi/.config/xfce4/panel/launcher-8/xfce4-appfinder.desktop
 
 _TMP=""
 xfconf-query -n -a -c xfce4-panel -p /panels -t int -s 0
@@ -297,7 +286,6 @@ EOF
 
 #--- Add to startup
 mkdir -p /root/.config/autostart/
-mkdir -p /home/pi/.config/autostart
 file=/root/.config/autostart/wallpaper.desktop; [ -e "${file}" ] && cp -n $file{,.bkup}
 cat <<EOF > "${file}" \
   || echo -e ' '${RED}'[!] Issue with writing file'${RESET} 1>&2
@@ -310,17 +298,12 @@ X-GNOME-Autostart-enabled=true
 Name=wallpaper
 EOF
 
-cp /root/.config/autostart/wallpaper.desktop /home/pi/.config/autostart/wallpaper.desktop
-
 # Firefox
 
 #--- Set firefox for XFCE's default
-mkdir -p /home/pi/.config/xfce4/
 mkdir -p /root/.config/xfce4/
 
 file=/root/.config/xfce4/helpers.rc; [ -e "${file}" ] && cp -n $file{,.bkup}    #exo-preferred-applications   #xdg-mime default
 ([[ -e "${file}" && "$(tail -c 1 ${file})" != "" ]]) && echo >> "${file}"
 sed -i 's#^WebBrowser=.*#WebBrowser=firefox#' "${file}" 2>/dev/null \
   || echo -e 'WebBrowser=firefox' >> "${file}"
-
-cp /root/.config/xfce4/helpers.rc /home/pi/.config/xfce4/helpers.rc
