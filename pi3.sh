@@ -193,7 +193,7 @@ echo "Brining interface down"
 ifconfig wlan0 down
 rmmod brcmfmac
 echo "Copying modified firmware"
-cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcmfmac43430-sdio.bin && insmod /root/brcmfmac.ko
+cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin && insmod /root/brcmfmac.ko
 EOF
 
 cat << EOF > kali-$architecture/usr/bin/monstop
@@ -202,7 +202,7 @@ echo "Brining interface wlan0 down"
 ifconfig wlan0 down
 rmmod brcmfmac
 echo "Copying original firmware"
-cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcmfmac43430-sdio.bin
+cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
 sleep 1
 echo "Reloading brcmfmac"
 modprobe brcmfmac
@@ -613,6 +613,7 @@ make firmware_install INSTALL_MOD_PATH=${basedir}/root
 make mrproper
 cp arch/arm/configs/re4son_pi2_defconfig .config
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
+make modules
 make modules_prepare &&
 
 # Unmount partitions
@@ -763,12 +764,13 @@ EOF
     cp -rf $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/lib/firmware/brcm/
 
     # Copy nexmon firmware and module to /root
+    # For testing
     echo "[+] Copying nexmon firmware and module"
-    cp $TOPDIR/nexmon/brcmfmac43430-sdio.bin $dir/root/
+    wget https://github.com/seemoo-lab/bcm-rpi3/releases/download/0.2/brcmfmac43430-sdio.bin -O $dir/root/brcmfmac43430-sdio.bin.gitrpi
     #cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
 
     # Stick with original firmware so wifi works out of the box
-    cp $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/lib/firmware/brcm/
+    cp $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/lib/firmware/brcm/brcmfmac43430-sdio.bin
 
     echo "[+] Copy Zram"
     cp -f $TOPDIR/misc/rpi3/zram $dir/etc/init.d/zram
