@@ -1,8 +1,16 @@
-# RPI3 Image with native monitor mode and/TFT (3.5) Support
+# Raspberry Pi 3 Image with native monitor mode and/TFT (3.5) Support
+
+* This is an unofficial Kali Raspberry Pi 3 image *
 
 This uses re4son's PI TFT kernel with Nexmon firmware for native monitor mode.
 
-## Instructions
+## Download
+
+Don't want to build but you are ready to download?
+
+https://github.com/nethunteros/rpi3-kalimon/releases
+
+## Instructions to build
 
 On Ubuntu or Kali download prereqs:
 ```bash
@@ -27,10 +35,13 @@ Then run pi3.sh with version number
 
 To change the size of LCD screen modify the command line with correct size of screen:
 ```bash
+# This example is a 3.5" screen
 sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t 35r -u /root"
 ```
-
-Then run.
+You can also run the same command to switch to TFT display if you install one later:
+```
+/root/re4son-pi-tft-setup -t 35r -u /root
+```
 
 ## Sources:
 
