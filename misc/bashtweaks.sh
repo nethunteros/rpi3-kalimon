@@ -38,8 +38,6 @@ grep -q "^alias l='ls $LS_OPTIONS -lA'" "${file}" 2>/dev/null \
 file=/etc/skel/.bashrc   #; [ -e "${file}" ] && cp -n $file{,.bkup}
 sed -i 's/.*force_color_prompt=.*/force_color_prompt=yes/' "${file}"
 
-apt-get install -y grc
-
 file=~/.bash_aliases; [ -e "${file}" ] && cp -n $file{,.bkup}   #/etc/bash.bash_aliases
 ([[ -e "${file}" && "$(tail -c 1 ${file})" != "" ]]) && echo >> "${file}"
 grep -q '^## grc diff alias' "${file}" 2>/dev/null \

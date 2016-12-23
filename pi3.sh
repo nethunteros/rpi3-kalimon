@@ -76,25 +76,25 @@ if [ ! -f /usr/share/debootstrap/scripts/kali-rolling ]; then
 fi
 
 arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-utils"
-base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus"
+base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus cowsay"
 desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
 xfce4="gtk3-engines-xfce lightdm-gtk-greeter-settings xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder"
-tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash  php-cli sqlmap usbutils winexe wireshark"
+tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash php-cli sqlmap usbutils winexe wireshark"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip unrar curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
 wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
-g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid unicornscan webshells wordlists p0f cowsay msfpc exe2hexbat windows-binaries"
+#g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid unicornscan webshells wordlists p0f msfpc exe2hexbat windows-binaries"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
 
 if [ "${BUILD_TFT}" = true ] ; then
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn} ${g0tmi1k}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn}"
 else
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn} ${g0tmi1k}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn}"
 fi
 
 # Archteicture for Pi3 is armhf
@@ -195,6 +195,7 @@ rmmod brcmfmac
 echo "Copying modified firmware"
 cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin && insmod /root/brcmfmac.ko
 EOF
+chmod +x kali-$architecture/usr/bin/monstart
 
 cat << EOF > kali-$architecture/usr/bin/monstop
 #!/bin/bash
@@ -207,6 +208,8 @@ sleep 1
 echo "Reloading brcmfmac"
 modprobe brcmfmac
 EOF
+chmod +x kali-$architecture/usr/bin/monstop
+
 
 echo "[+] Begin THIRD STAGE"
 cat << EOF > kali-$architecture/third-stage
@@ -236,88 +239,28 @@ apt-get --yes --force-yes install $packages
 apt-get --yes --force-yes dist-upgrade
 apt-get --yes --force-yes autoremove
 
-systemctl enable regenerate_ssh_host_keys
-
+echo "[+] Removing generated ssh keys"
 rm -f /etc/ssh/ssh_host_*_key*
 
 # Because copying in authorized_keys is hard for people to do, let's make the
 # image insecure and enable root login with a password.
 echo "[+] Making root great again"
 sed -i -e 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-update-rc.d ssh enable
-
-# XFCE stuff (both users?)
-echo "[+] Running XFCE setup"
-chmod +x /tmp/xfce4-setup.sh
-/tmp/xfce4-setup.sh
-
-echo "[+] Running bash tweaks"
-chmod +x /tmp/bashtweaks.sh
-/tmp/bashtweaks.sh
-
-chmod +x /usr/bin/monstart
-chmod +x /usr/bin/monstop
 
 # Turn off wifi power saving
+echo "[+] Turn off wifi power saving"
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
 echo "iwconfig wlan0 power off" >> /etc/rc.local
 
-#echo "[+] Creating the swap file to /root"
-#dd if=/dev/zero of=/var/swapfile.img bs=1M count=1024 && 
-#chmod 0600 /var/swapfile.img
-#mkswap /var/swapfile.img
-#swapon /var/swapfile.img
+update-rc.d ssh enable
 
-echo "exit 101" > /usr/sbin/policy-rc.d
-chmod 744 /usr/sbin/policy-rc.d
-
-# Wireshark remove warning
-mkdir -p /home/pi/.wireshark/
-mkdir -p /root/.wireshark/
-echo "privs.warn_if_elevated: FALSE" > /home/pi/.wireshark/recent_common
-echo "privs.warn_if_elevated: FALSE" > /root/.wireshark/recent_common
-mv -f /usr/share/wireshark/init.lua{,.disabled}
 
 ############## Extra g0tmi1k apps ###############
 
-# Git clone webshells
-git clone -q -b master https://github.com/sensepost/reGeorg.git /opt/regeorg-git
-git clone -q -b master https://github.com/b374k/b374k.git /opt/b374k-git
-git clone -q -b master https://github.com/vrana/adminer.git /opt/adminer-git
-
-# Generate shells
-pushd /opt/b374k-git/ >/dev/null
-git pull -q
-php index.php -o b374k.php -s
-popd >/dev/null
-
-pushd /opt/adminer-git/ >/dev/null
-git pull -q
-php compile.php 2>/dev/null
-popd >/dev/null
-
-# Symlink webshells
-ln -sf /opt/reGeorg-git /usr/share/webshells/reGeorg
-ln -sf /opt/b374k-git /usr/share/webshells/php/b374k
-adminer=$(find /opt/adminer-git/ -name adminer-*.php -type f -print -quit)
-ln -sf "${adminer}" /usr/share/webshells/php/adminer.php
-
-# Proxychains-ng
-git clone -q -b master https://github.com/rofl0r/proxychains-ng.git /opt/proxychains-ng-git/
-pushd /opt/proxychains-ng-git/ >/dev/null
-git pull -q
-make -s clean
-./configure --prefix=/usr --sysconfdir=/etc >/dev/null
-make -s 2>/dev/null && make -s install
-popd >/dev/null
-mkdir -p /usr/local/bin/
-ln -sf /usr/bin/proxychains4 /usr/local/bin/proxychains-ng
-
-# PSExec
-timeout 300 curl --progress -k -L -f "https://download.sysinternals.com/files/PSTools.zip" > /tmp/pstools.zip
-timeout 300 curl --progress -k -L -f "http://www.coresecurity.com/system/files/pshtoolkit_v1.4.rar" > /tmp/pshtoolkit.rar \
-unzip -q -o -d /usr/share/windows-binaries/pstools/ /tmp/pstools.zip
-unrar x -y /tmp/pshtoolkit.rar /usr/share/windows-binaries/ >/dev/null
+# Wireshark remove warning
+mkdir -p /root/.wireshark/
+echo "privs.warn_if_elevated: FALSE" > /root/.wireshark/recent_common
+mv -f /usr/share/wireshark/init.lua{,.disabled}
 
 # Fun MOTD
 echo "Moo" | /usr/games/cowsay > /etc/motd
@@ -325,13 +268,6 @@ echo "Moo" | /usr/games/cowsay > /etc/motd
 # SSH Allow authorized keys
 sed -i 's/^#AuthorizedKeysFile /AuthorizedKeysFile /g' "/etc/ssh/sshd_config"  # Allow for key based login
 
-# NMAP Vulscan
-mkdir -p /usr/share/nmap/scripts/vulscan/
-timeout 300 curl --progress -k -L -f "http://www.computec.ch/projekte/vulscan/download/nmap_nse_vulscan-2.0.tar.gz" > /tmp/nmap_nse_vulscan.tar.gz
-gunzip /tmp/nmap_nse_vulscan.tar.gz
-tar -xf /tmp/nmap_nse_vulscan.tar -C /usr/share/nmap/scripts/
-#--- Fix permissions (by default its 0777)
-chmod -R 0755 /usr/share/nmap/scripts/; find /usr/share/nmap/scripts/ -type f -exec chmod 0644 {} \;
 
 ############################################################
 # Add bluetooth packages from Raspberry Pi
@@ -356,6 +292,16 @@ cd /tmp
 wget http://archive.raspberrypi.org/debian/pool/main/r/raspi-config/raspi-config_20161207_all.deb
 dpkg -i raspi-config_*
 
+# XFCE stuff (both users?)
+echo "[+] Running XFCE setup"
+chmod +x /tmp/xfce4-setup.sh
+/tmp/xfce4-setup.sh
+
+
+echo "[+] Running bash tweaks"
+chmod +x /tmp/bashtweaks.sh
+/tmp/bashtweaks.sh
+
 rm -f /usr/sbin/policy-rc.d
 rm -f /usr/sbin/invoke-rc.d
 dpkg-divert --remove --rename /usr/sbin/invoke-rc.d
@@ -375,7 +321,7 @@ rm -rf /root/.bash_history
 apt-get update
 apt-get clean
 rm -f /0
-rm -rf /tmp/*.deb /tmp/libfakeioctl /tmp/*.c /tmp/*.sh
+rm -rf /tmp/*.deb
 rm -f /hs_err*
 rm -f cleanup
 rm -f /usr/bin/qemu*
@@ -676,9 +622,11 @@ chmod +x $dir/root/tmp/buildnexmon.sh
 
     echo "[+] Building kernel & nexmon"
     chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
-    chroot $dir /bin/bash -c "cat /tmp/buildnexmon.sh"
     chroot $dir /bin/bash -c "chmod +x /tmp/buildnexmon.sh && /tmp/buildnexmon.sh"
     rm -f $dir/tmp/*
+
+    echo "[+] Enable sshd at startup"
+    chroot $dir /bin/bash -c "update-rc.d ssh enable"
 
 echo "[+] Creating /boot/config.txt"
 cat << EOF > $dir/boot/config.txt
@@ -794,6 +742,9 @@ EOF
         echo "[+] Setting up TFT settings for ${TFT_SIZE}"
         sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t ${TFT_SIZE} -u /root"
     fi
+
+    chroot $dir /bin/bash -c "systemctl enable regenerate_ssh_host_keys"
+
 
     echo "[+] Unmounting"
     sleep 10
