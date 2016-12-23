@@ -1,6 +1,6 @@
-# Raspberry Pi 3 Image with native monitor mode and/TFT (3.5) Support
+## Raspberry Pi 3 Image with monitor mode
 
-* This is an unofficial Kali Raspberry Pi 3 image *
+_This is an unofficial Kali Raspberry Pi 3 image_
 
 This uses re4son's PI TFT kernel with Nexmon firmware for native monitor mode.
 
@@ -10,7 +10,11 @@ Don't want to build but you are ready to download?
 
 https://github.com/nethunteros/rpi3-kalimon/releases
 
-## Instructions to build
+## Screenshot
+
+![Screenshot](http://i.imgur.com/KQxqcbP.jpg)
+
+## Instructions to build your own image
 
 On Ubuntu or Kali download prereqs:
 ```bash
@@ -45,9 +49,8 @@ You can also run the same command to switch to TFT display if you install one la
 
 ## Sources:
 
-```bash
-Steev's Scripts: https://github.com/offensive-security/kali-arm-build-scripts
-re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
-re4son's github: https://github.com/re4son/
-nexmon: https://github.com/seemoo-lab/bcm-rpi3
-```
+* Steev's Scripts: https://github.com/offensive-security/kali-arm-build-scripts
+* re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
+* re4son's github: https://github.com/re4son/
+* nexmon: https://github.com/seemoo-lab/bcm-rpi3
+* g0tmi1lk: https://github.com/g0tmi1k/os-scripts/blob/master/kali-rolling.sh
