@@ -495,6 +495,27 @@ deb http://http.kali.org/kali kali-rolling main contrib non-free
 #deb-src http://http.kali.org/kali kali-rolling main non-free contrib
 EOF
 
+# Kernel section. If you want to use a custom kernel, or configuration, replace
+# them in this section.
+# Old way
+# git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
+# cd ${basedir}/root/usr/src/kernel
+export ARCH=arm
+export CROSS_COMPILE=arm-linux-gnueabihf-
+
+# RPI Firmware (copy to /boot)
+echo "[+] Copying Raspberry Pi Firmware to /boot"
+git clone --depth 1 https://github.com/raspberrypi/firmware.git rpi-firmware
+cp -rf rpi-firmware/boot/* ${basedir}/bootp/
+rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
+rm -rf rpi-firmware
+
+# Linux Firmware (copy to /lib)
+echo "[+] Copying Linux Firmware to /lib"
+cd ${basedir}/root/lib
+git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git firmware
+rm -rf ${basedir}/root/lib/firmware/.git
+
 # Make nexmon and kernel
 echo "*********************************************"
 echo "
@@ -519,32 +540,20 @@ _____  \
   #            #
   $(tput sgr0)"
 echo "*********************************************"
-# Kernel and firmware
-git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
+cd $TOPDIR/bcm-rpi3/
+source setup_env.sh 
+cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
+make
 
-rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
-git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git ${basedir}/root/lib/firmware
-rm -rf ${basedir}/root/lib/firmware/.git
-
-git clone --depth 1 https://github.com/raspberrypi/firmware.git ${basedir}/root/tmp/rpi-firmware
-git clone --depth 1 https://github.com/nethunteros/nexmon.git ${basedir}/root/opt/nexmon
-
-# EXPORTS
-export ARCH=arm
-export CROSS_COMPILE=arm-linux-gnueabihf-
-export KERNEL=kernel7
-
-# RPI Firmware (copy to /boot)
-echo "[+] Copying Raspberry Pi Firmware to /boot"
-cp -rf ${basedir}/root/tmp/rpi-firmware/boot/* ${basedir}/bootp/
-rm -rf ${basedir}/root/tmp/rpi-firmware
+# Copy nexmon firmware and module
+echo "[+] Copying nexmon firmware and module"
+cp brcmfmac43430-sdio.bin ${basedir}/root/root/
+cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
+cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
 
 echo "[+] Moving to kernel folder and making modules"
-cd ${basedir}/root/usr/src/kernel
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- -j$(grep -c processor /proc/cpuinfo) zImage modules dtbs
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- modules_install INSTALL_MOD_PATH=${basedir}/root
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install INSTALL_MOD_PATH=${basedir}/root
+cd $TOPDIR/bcm-rpi3/kernel/
+make modules_install INSTALL_MOD_PATH=${basedir}/root
 
 echo "[+] Copying kernel"
 # ARGH.  Device tree support requires we run this *sigh*
@@ -555,20 +564,43 @@ cp arch/arm/boot/dts/overlays/*.dtb* ${basedir}/bootp/overlays/
 cp arch/arm/boot/dts/overlays/README ${basedir}/bootp/overlays/
 
 echo "[+] Creating and copying modules"
-make firmware_install INSTALL_MOD_PATH=${basedir}/root
+make INSTALL_MOD_PATH=${basedir}/root firmware_install 
 make mrproper
 cp arch/arm/configs/re4son_pi2_defconfig .config
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make modules
-make modules_prepare &&
+make modules_prepare
+
+# Create cmdline.txt file
+cat << EOF > ${basedir}/bootp/cmdline.txt
+dwc_otg.fiq_fix_enable=2 console=ttyAMA0,115200 kgdboc=ttyAMA0,115200 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait rootflags=noload net.ifnames=0
+EOF
+
+# systemd doesn't seem to be generating the fstab properly for some people, so
+# let's create one.
+cat << EOF > ${basedir}/root/etc/fstab
+# <file system> <mount point>   <type>  <options>       <dump>  <pass>
+proc /proc proc nodev,noexec,nosuid 0  0
+/dev/mmcblk0p2  / ext4 errors=remount-ro 0 1
+# Change this if you add a swap partition or file
+#/var/swapfile none swap sw 0 0
+/dev/mmcblk0p1 /boot vfat noauto 0 0
+EOF
 
 # Unmount partitions
-echo "[+] Unmounting root and boot"
-sleep 10
-umount -l $bootp
-umount -l $rootp
+umount $bootp
+umount $rootp
 kpartx -dv $loopdevice
 losetup -d $loopdevice
+
+# Clean up all the temporary build stuff and remove the directories.
+# Comment this out to keep things around if you want to see what may have gone
+# wrong.
+echo "Cleaning up the temporary build files..."
+rm -rf ${basedir}/kernel
+rm -rf ${basedir}/bootp
+rm -rf ${basedir}/root
+rm -rf ${basedir}/boot
+rm -rf ${basedir}/patches
 
 # Clean up all the temporary build stuff and remove the directories.
 # Comment this out to keep things around if you want to see what may have gone
@@ -603,30 +635,11 @@ if [ -f "${OUTPUTFILE}" ]; then
     cp /usr/bin/qemu-arm-static $dir/usr/bin/
     chmod +755 $dir/usr/bin/qemu-arm-static
 
-cat << EOF > $dir/tmp/buildnexmon.sh
-echo "[+] Starting nexmon build"
-# make scripts doesn't work if we cross crompile
-cd /usr/src/kernel
-make scripts
-# Symlink is broken since we build outside of device (will pint to host system)
-rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
-ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
-ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
-# Start nexmon build
-cd /opt/nexmon/ && source setup_env.sh && cd patches/bcm43438/7_45_41_26/nexmon/ && make
-cp brcmfmac43430-sdio.bin /root/brcmfmac43430-sdio.bin
-cp brcmfmac/brcmfmac.ko /root
-echo "[+] Nexmon build completed"
-EOF
-chmod +x $dir/root/tmp/buildnexmon.sh
-
-    echo "[+] Building kernel & nexmon"
-    chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
-    chroot $dir /bin/bash -c "chmod +x /tmp/buildnexmon.sh && /tmp/buildnexmon.sh"
-    rm -f $dir/tmp/*
-
     echo "[+] Enable sshd at startup"
     chroot $dir /bin/bash -c "update-rc.d ssh enable"
+
+    rm -f $dir/tmp/*
+
 
 echo "[+] Creating /boot/config.txt"
 cat << EOF > $dir/boot/config.txt

@@ -1,5 +1,6 @@
 *.log
 *.xz
 rpi2-kali
+bcm-rpi3
 kali-armhf
 gcc-arm-linux-gnueabihf-4.7
