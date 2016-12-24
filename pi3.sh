@@ -83,18 +83,18 @@ tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash php-cli sqlmap u
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip unrar curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
-tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame bluez-firmware python-kivy"
+tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame"
 wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
-#g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid unicornscan webshells wordlists p0f msfpc exe2hexbat windows-binaries"
+g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid p0f msfpc exe2hexbat windows-binaries"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
 
 if [ "${BUILD_TFT}" = true ] ; then
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn} ${g0tmi1k}"
 else
-    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn}"
+    packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn} ${g0tmi1k}"
 fi
 
 # Archteicture for Pi3 is armhf
@@ -268,17 +268,29 @@ echo "Moo" | /usr/games/cowsay > /etc/motd
 # SSH Allow authorized keys
 sed -i 's/^#AuthorizedKeysFile /AuthorizedKeysFile /g' "/etc/ssh/sshd_config"  # Allow for key based login
 
-
 ############################################################
+# Depends for rasp-config and bluetooth
+apt-get install -y libnewt0.52 whiptail parted triggerhappy lua5.1 alsa-utils bluez-firmware
+apt-get install -fy
+
 # Add bluetooth packages from Raspberry Pi
-# Make bluetooth work again
+# Make bluetooth work again:
+# https://whitedome.com.au/re4son/topic/solved-guide-to-get-rpi3-internal-bluetooth-working/
 cd /tmp
 wget https://archive.raspberrypi.org/debian/pool/main/b/bluez/bluez_5.23-2+rpi2_armhf.deb
 dpkg -i bluez_5.23-2+rpi2_armhf.deb
 apt-mark hold bluez
 
+wget https://archive.raspberrypi.org/debian/pool/main/p/pi-bluetooth/pi-bluetooth_0.1.1_armhf.deb
+dpkg -i pi-bluetooth_0.1.1_armhf.deb
+apt-mark hold pi-bluetooth
+
+systemctl enable bluetooth
+systemctl enable hciuart
+
 # Add Login Screen Tweaks
 # Add virtual keyboard to login screen
+echo "[greeter]" > /etc/lightdm/lightdm-gtk-greeter.conf
 echo "show-indicators=~language;~a11y;~session;~power" > /etc/lightdm/lightdm-gtk-greeter.conf
 echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
 # Background image and change logo
@@ -286,8 +298,6 @@ echo "background=/usr/share/images/desktop-base/kali-lockscreen_1280x1024.png" >
 echo "default-user-image=#kali-k" >> /etc/lightdm/lightdm-gtk-greeter.conf
 
 # Raspi-config install
-apt-get install -y libnewt0.52 whiptail parted triggerhappy lua5.1 alsa-utils
-apt-get install -fy
 cd /tmp
 wget http://archive.raspberrypi.org/debian/pool/main/r/raspi-config/raspi-config_20161207_all.deb
 dpkg -i raspi-config_*
@@ -509,6 +519,9 @@ git clone --depth 1 https://github.com/raspberrypi/firmware.git rpi-firmware
 cp -rf rpi-firmware/boot/* ${basedir}/bootp/
 rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
 rm -rf rpi-firmware
+
+# Copying kernel source to rootfs
+cp -rf $TOPDIR/bcm-rpi3/kernel ${basedir}/root/usr/src/kernel
 
 # Linux Firmware (copy to /lib)
 echo "[+] Copying Linux Firmware to /lib"
@@ -756,6 +769,7 @@ EOF
         sudo chroot $dir /bin/bash -c "/root/re4son-pi-tft-setup -t ${TFT_SIZE} -u /root"
     fi
 
+    # Enable regenerate ssh host keys at first boot
     chroot $dir /bin/bash -c "systemctl enable regenerate_ssh_host_keys"
 
 
