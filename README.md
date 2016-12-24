@@ -18,6 +18,7 @@ https://github.com/nethunteros/rpi3-kalimon/releases
 
 On Ubuntu or Kali download prereqs:
 ```bash
+dpkg --add-architecture i386  # For 64 bit
 apt-get install -y git-core gnupg flex bison gperf libesd0-dev build-essential \
 zip curl libncurses5-dev zlib1g-dev libncurses5-dev gcc-multilib g++-multilib \
 parted kpartx debootstrap pixz qemu-user-static abootimg cgpt vboot-kernel-utils \
