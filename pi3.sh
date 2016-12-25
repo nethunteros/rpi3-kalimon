@@ -84,7 +84,7 @@ services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip unrar curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame"
-wireless="aircrack-ng kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
+wireless="aircrack-ng cowpatty python-dev kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
 g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid p0f msfpc exe2hexbat windows-binaries"
 
