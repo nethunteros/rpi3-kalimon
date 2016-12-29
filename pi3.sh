@@ -86,7 +86,7 @@ extras="unzip unrar curl firefox-esr xfce4-terminal wpasupplicant florence tcpdu
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame"
 wireless="aircrack-ng cowpatty python-dev kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
-g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid p0f msfpc exe2hexbat windows-binaries"
+g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid p0f msfpc exe2hexbat windows-binaries thefuck burpsuite"
 
 # kernel sauces take up space yo.
 size=7000 # Size of image in megabytes
@@ -648,8 +648,23 @@ if [ -f "${OUTPUTFILE}" ]; then
     cp /usr/bin/qemu-arm-static $dir/usr/bin/
     chmod +755 $dir/usr/bin/qemu-arm-static
 
+cat << EOF > $dir/tmp/fixkernel.sh
+echo "[+] Fixing kernel symlink"
+# make scripts doesn't work if we cross crompile
+cd /usr/src/kernel
+make scripts
+# Symlink is broken since we build outside of device (will link to host system)
+rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+EOF
+chmod +x $dir/root/tmp/fixkernel.sh
+
     echo "[+] Enable sshd at startup"
+
     chroot $dir /bin/bash -c "update-rc.d ssh enable"
+
+    echo "[] Symlink to build"
+    chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && /tmp/fixkernel.sh"
 
     rm -f $dir/tmp/*
 
