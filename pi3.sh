@@ -463,7 +463,7 @@ $(tput sgr0)"
 echo "*********************************************"
 mkdir -p ${basedir}
 
-size=7000 # Size of image in megabytes
+size=8000 # Size of image in megabytes
 
 # Create the disk (img file) and partition it
 echo "[+] Creating image file for Raspberry Pi2"
@@ -519,9 +519,6 @@ git clone --depth 1 https://github.com/raspberrypi/firmware.git rpi-firmware
 cp -rf rpi-firmware/boot/* ${basedir}/bootp/
 rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
 rm -rf rpi-firmware
-
-# Copying kernel source to rootfs
-cp -rf $TOPDIR/bcm-rpi3/kernel ${basedir}/root/usr/src/kernel
 
 # Linux Firmware (copy to /lib)
 echo "[+] Copying Linux Firmware to /lib"
@@ -582,6 +579,11 @@ make mrproper
 cp arch/arm/configs/re4son_pi2_defconfig .config
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
 make modules_prepare
+echo "[+] Making kernel headers"
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install INSTALL_HDR_PATH=${basedir}/root/usr
+
+# Copying kernel source to rootfs
+cp -rf $TOPDIR/bcm-rpi3/kernel ${basedir}/root/usr/src/kernel
 
 # Create cmdline.txt file
 cat << EOF > ${basedir}/bootp/cmdline.txt
@@ -657,7 +659,7 @@ make scripts
 rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
 ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
 EOF
-chmod +x $dir/root/tmp/fixkernel.sh
+chmod +x $dir/tmp/fixkernel.sh
 
     echo "[+] Enable sshd at startup"
 
