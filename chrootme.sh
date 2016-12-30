@@ -1,5 +1,24 @@
 #!/bin/bash
-OUTPUTFILE="`pwd`/rpi2-kali/kali-0.3-rpi2.img"
+
+#http://stackoverflow.com/a/15808052
+prompt="Please select a file:"
+options=( $(find rpi2-kali -iregex ".*\.\(img\)" -print0 | xargs -0) )
+
+PS3="$prompt "
+select OUTPUTFILE in "${options[@]}" "Quit" ; do 
+    if (( REPLY == 1 + ${#options[@]} )) ; then
+        exit
+
+    elif (( REPLY > 0 && REPLY <= ${#options[@]} )) ; then
+        echo  "You picked $OUTPUTFILE which is file $REPLY"
+        break
+
+    else
+        echo "Invalid option. Try another one."
+    fi
+done
+
+echo $OUTPUTFILE
 
 if [ -f "${OUTPUTFILE}" ]; then
 
