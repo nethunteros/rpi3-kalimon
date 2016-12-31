@@ -59,7 +59,7 @@ TOPDIR=`pwd`                        # CURRENT FOLDER
 VERSION=$1
 
 # TOOLCHAIN
-export PATH=${PATH}:`pwd`/gcc-arm-linux-gnueabihf-4.7/bin
+#export PATH=${PATH}:`pwd`/gcc-arm-linux-gnueabihf-4.7/bin
 
 # BUILD THE KALI FILESYSTEM
 
@@ -513,6 +513,9 @@ EOF
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 
+echo "[+] Clonging nexmon repo"
+git clone --depth 1 https://github.com/seemoo-lab/nexmon.git ${basedir}/root/opt/nexmon
+
 # RPI Firmware (copy to /boot)
 echo "[+] Copying Raspberry Pi Firmware to /boot"
 git clone --depth 1 https://github.com/raspberrypi/firmware.git rpi-firmware
@@ -574,11 +577,8 @@ cp arch/arm/boot/dts/overlays/*.dtb* ${basedir}/bootp/overlays/
 cp arch/arm/boot/dts/overlays/README ${basedir}/bootp/overlays/
 
 echo "[+] Creating and copying modules"
-make INSTALL_MOD_PATH=${basedir}/root firmware_install 
-make mrproper
-cp arch/arm/configs/re4son_pi2_defconfig .config
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make modules_prepare
+make INSTALL_MOD_PATH=${basedir}/root firmware_install
+
 echo "[+] Making kernel headers"
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install INSTALL_HDR_PATH=${basedir}/root/usr
 
@@ -651,25 +651,62 @@ if [ -f "${OUTPUTFILE}" ]; then
     chmod +755 $dir/usr/bin/qemu-arm-static
 
 cat << EOF > $dir/tmp/fixkernel.sh
+#!/bin/bash
+unset CROSS_COMPILE
+export CROSS_COMPILE=/opt/nexmon/buildtools/gcc-arm-none-eabi-5_4-2016q2-linux-armv7l/bin/arm-none-eabi-
 echo "[+] Fixing kernel symlink"
-# make scripts doesn't work if we cross crompile
-cd /usr/src/kernel
-make scripts
+cd /opt/nexmon/
+source setup_env.sh
+cd buildtools
+make
 # Symlink is broken since we build outside of device (will link to host system)
 rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
 ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+# make scripts doesn't work if we cross crompile
+cd /usr/src/kernel
+make ARCH=arm scripts
+# Build nexmon
+cd /opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/ && make
 EOF
 chmod +x $dir/tmp/fixkernel.sh
+
+cat << EOF > $dir/tmp/fakeuname.c
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/utsname.h>
+
+#include <stdio.h>
+#include <string.h>
+
+/* Fake uname -r because we are in a chroot:
+https://gist.github.com/DamnedFacts/5239593
+*/
+
+int uname(struct utsname *buf)
+{
+ int ret;
+
+ ret = syscall(SYS_uname, buf);
+ strcpy(buf->release, "4.4.39-v7_Re4son-Kali-Pi-TFT+");
+ strcpy(buf->machine, "armv7l");
+
+ return ret;
+}
+EOF
 
     echo "[+] Enable sshd at startup"
 
     chroot $dir /bin/bash -c "update-rc.d ssh enable"
 
     echo "[] Symlink to build"
-    chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && /tmp/fixkernel.sh"
+    chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
+    chroot $dir /bin/bash -c "cd /tmp && gcc -Wall -shared -o libfakeuname.so fakeuname.c"
+    chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && LD_PRELOAD=/tmp/libfakeuname.so /tmp/fixkernel.sh"
 
-    rm -f $dir/tmp/*
-
+    #rm -f $dir/tmp/*
 
 echo "[+] Creating /boot/config.txt"
 cat << EOF > $dir/boot/config.txt
