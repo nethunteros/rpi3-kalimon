@@ -510,23 +510,40 @@ EOF
 # Old way
 # git clone --depth 1 https://github.com/nethunteros/re4son-raspberrypi-linux.git -b rpi-4.4.y-re4son ${basedir}/root/usr/src/kernel
 # cd ${basedir}/root/usr/src/kernel
+# Make nexmon and kernel
+MOD_DIR=`mktemp -d`
+PKG_TMP=`mktemp -d`
+TEMP_DIR=`mktemp -d`
+FIRMWARE_TMP=`mktemp -d`
+TOOLS_DIR=`pwd`/bcm-rpi3/buildtools/gcc-linaro-arm-linux-gnueabihf-raspbian/bin/
+
+# For package
+VERSION_KERN="4.4.38"
+CURRENT_DATE=`date +%Y%m%d`
+NEW_VERSION="${VERSION_KERN}-${CURRENT_DATE}"
+PKG_DIR="${PKG_TMP}/raspberrypi-firmware_${NEW_VERSION}"
+mkdir -p $PKG_DIR
+mkdir -p $PKG_DIR/boot
+
+echo "[+] Setting export paths"
 export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
+export PATH=$PATH:$TOOLS_DIR
+
+echo "[+] Clonging nexmon repo"
+git clone --depth 1 https://github.com/seemoo-lab/nexmon.git ${basedir}/root/opt/nexmon
 
 # RPI Firmware (copy to /boot)
 echo "[+] Copying Raspberry Pi Firmware to /boot"
-git clone --depth 1 https://github.com/raspberrypi/firmware.git rpi-firmware
-cp -rf rpi-firmware/boot/* ${basedir}/bootp/
-rm -rf ${basedir}/root/lib/firmware  # Remove /lib/firmware to copy linux firmware
-rm -rf rpi-firmware
+git clone --depth 1 https://github.com/RPi-Distro/firmware ${FIRMWARE_TMP}
+cp -rf $FIRMWARE_TMP/* $PKG_DIR
 
 # Linux Firmware (copy to /lib)
 echo "[+] Copying Linux Firmware to /lib"
 cd ${basedir}/root/lib
-git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git firmware
+git clone --depth 1 https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git ${basedir}/root/lib/firmware
 rm -rf ${basedir}/root/lib/firmware/.git
 
-# Make nexmon and kernel
 echo "*********************************************"
 echo "
 $(tput setaf 2)
@@ -553,37 +570,124 @@ echo "*********************************************"
 cd $TOPDIR/bcm-rpi3/
 source setup_env.sh 
 cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
-make
-
-# Copy nexmon firmware and module
-echo "[+] Copying nexmon firmware and module"
-cp brcmfmac43430-sdio.bin ${basedir}/root/root/
-cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
-cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
+make  # Starts kernel build
 
 echo "[+] Moving to kernel folder and making modules"
 cd $TOPDIR/bcm-rpi3/kernel/
-make modules_install INSTALL_MOD_PATH=${basedir}/root
+make modules_install INSTALL_MOD_PATH=$MOD_DIR
+cp -rf ${MOD_DIR}/lib/* ${PKG_DIR}
+
+# Copy nexmon firmware and module
+echo "[+] Copying nexmon firmware and module"
+cp $TOPDIR/bcm-rpi3/nexmon/brcmfmac43430-sdio.bin ${basedir}/root/root/
+cp $TOPDIR/bcm-rpi3/nexmon/brcmfmac43430-sdio.bin ${PKGDIR}/lib/firmware/brcm/
+cp $TOPDIR/bcm-rpi3/nexmon/brcmfmac/brcmfmac.ko ${basedir}/root/root/
 
 echo "[+] Copying kernel"
 # ARGH.  Device tree support requires we run this *sigh*
-perl scripts/mkknlimg --dtok arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
+perl scripts/mkknlimg --dtok arch/arm/boot/zImage ${PKG_DIR}/boot/kernel7.img
 #cp arch/arm/boot/zImage ${basedir}/bootp/kernel7.img
-cp arch/arm/boot/dts/*.dtb ${basedir}/bootp/
-cp arch/arm/boot/dts/overlays/*.dtb* ${basedir}/bootp/overlays/
-cp arch/arm/boot/dts/overlays/README ${basedir}/bootp/overlays/
-
-echo "[+] Creating and copying modules"
-make INSTALL_MOD_PATH=${basedir}/root firmware_install 
-make mrproper
-cp arch/arm/configs/re4son_pi2_defconfig .config
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- re4son_pi2_defconfig
-make modules_prepare
-echo "[+] Making kernel headers"
-make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install INSTALL_HDR_PATH=${basedir}/root/usr
+mkdir -p ${PKG_DIR}/boot/overlays
+cp arch/arm/boot/dts/*.dtb ${PKG_DIR}/boot/
+cp arch/arm/boot/dts/overlays/*.dtb* ${PKG_DIR}/boot/overlays/
+cp arch/arm/boot/dts/overlays/README ${PKG_DIR}/boot/overlays/
 
 # Copying kernel source to rootfs
 cp -rf $TOPDIR/bcm-rpi3/kernel ${basedir}/root/usr/src/kernel
+
+# tar up firmware
+cd $PKG_TMP
+tar czf raspberrypi-firmware_${NEW_VERSION}.orig.tar.gz raspberrypi-firmware_${NEW_VERSION}
+
+# copy debian files to package directory
+touch $PKG_DIR/debian/files
+cd $PKG_DIR/debian
+chmod +x gen_bootloader_postinst_preinst.sh
+./gen_bootloader_postinst_preinst.sh
+
+cd $PKG_DIR
+dch -v ${NEW_VERSION} --package raspberrypi-firmware 'Adds re4son kali-pi-tft kernel'
+debuild --no-lintian -ePATH=${PATH}:${TOOLS_DIR} -b -aarmhf -us -uc
+
+cd $PKG_TMP
+mkdir -p re4son_kali-pi-tft_kernel_${NEW_VERSION}
+mkdir -p re4son_kali-pi-tft_kernel_${NEW_VERSION}/docs
+mkdir -p re4son_kali-pi-tft_kernel_${NEW_VERSION}/dts
+mkdir -p re4son_kali-pi-tft_kernel_${NEW_VERSION}/tools
+cp *.deb re4son_kali-pi-tft_kernel_${NEW_VERSION}
+
+cat << EOF > re4son_kali-pi-tft_kernel_${NEW_VERSION}/install.sh
+#!/usr/bin/env bash
+#
+# The MIT License (MIT)
+#
+# Copyright (c) 2015 Adafruit
+# Adjusted for Sticky Finger's Kali-Pi by re4son [at] whitedome.com.au
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
+
+if [[ $EUID -ne 0 ]]; then
+   echo "install.sh must be run as root. try: sudo install.sh"
+   exit 1
+fi
+
+# via: http://stackoverflow.com/a/5196108
+function exitonerr {
+
+  "$@"
+  local status=$?
+
+  if [ $status -ne 0 ]; then
+    echo "Error completing: $1" >&2
+    exit 1
+  fi
+
+  return $status
+
+}
+echo "**** Installing custom Re4son kernel with kali wifi injection patch and TFT support ****"
+apt-get update
+exitonerr apt-get install device-tree-compiler
+exitonerr dpkg -i --ignore-depends=raspberrypi-kernel raspberrypi-bootloader_*
+exitonerr dpkg -i raspberrypi-kernel_*
+exitonerr dpkg -i libraspberrypi0_*
+exitonerr dpkg -i libraspberrypi-dev_*
+exitonerr dpkg -i libraspberrypi-doc_*
+exitonerr dpkg -i libraspberrypi-bin_*
+
+echo "**** Installing device tree overlays for various screens ****"
+echo "++++ Adafruit"
+echo "++++ Elecfreak"
+echo "++++ JBTek"
+echo "++++ Sainsmart"
+echo "++++ Waveshare"
+echo "**** Device tree overlays installed ****"
+echo "**** Kernel install complete! ****"
+echo "**** Fixing unmet dependencies in Kali Linux ****"
+mkdir -p /etc/kbd
+touch /etc/kbd/config
+EOF
+chmod +x re4son_kali-pi-tft_kernel_${NEW_VERSION}/install.sh
+
+tar cJf re4son_kali-pi-tft_kernel_${NEW_VERSION}.tar.xz re4son_kali-pi-tft_kernel_${NEW_VERSION}
+mkdir -p ${TOPDIR}/prepackaged_kernel
+mv -f re4son_kali-pi-tft_kernel_${NEW_VERSION}.tar.xz ${TOPDIR}/prepackaged_kernel
 
 # Create cmdline.txt file
 cat << EOF > ${basedir}/bootp/cmdline.txt
@@ -651,22 +755,56 @@ if [ -f "${OUTPUTFILE}" ]; then
     chmod +755 $dir/usr/bin/qemu-arm-static
 
 cat << EOF > $dir/tmp/fixkernel.sh
-echo "[+] Fixing kernel symlink"
+#!/bin/bash
+echo "[+] Fixing kernel symlinks and try to build new nexmon"
 # make scripts doesn't work if we cross crompile
+cd /opt/nexmon/ && source setup_env.sh
 cd /usr/src/kernel
 make scripts
 # Symlink is broken since we build outside of device (will link to host system)
 rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
 ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+cd /opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/ && make
 EOF
 chmod +x $dir/tmp/fixkernel.sh
 
-    echo "[+] Enable sshd at startup"
+cat << EOF > $dir/tmp/fakeuname.c
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <sys/utsname.h>
 
+#include <stdio.h>
+#include <string.h>
+
+//https://gist.github.com/DamnedFacts/5239593
+
+int uname(struct utsname *buf)
+{
+ int ret;
+
+ ret = syscall(SYS_uname, buf);
+ strcpy(buf->release, "4.4.39-v7_Re4son-Kali-Pi-TFT+");
+
+ return ret;
+}
+EOF
+
+# Install prepacked kernel
+cp $TOPDIR/prepackaged_kernel/* $dir/tmp/
+
+    echo "[+] Install kernel package"
+    chroot $dir /bin/bash -c "cd /tmp && tar xvf re4son_kali-pi-tft_kernel* && rm *.xz && cd re4son* && ./install.sh"
+
+    echo "[+] Enable sshd at startup"
     chroot $dir /bin/bash -c "update-rc.d ssh enable"
 
-    echo "[] Symlink to build"
-    chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && /tmp/fixkernel.sh"
+    echo "[+] Build nexmon"
+    chroot $dir /bin/bash -c "cd /tmp && gcc -Wall -shared -o libfakeuname.so fakeuname.c"
+    chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
+    chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && LD_PRELOAD=/tmp/libfakeuname.so /tmp/fixkernel.sh"
 
     rm -f $dir/tmp/*
 
@@ -834,3 +972,4 @@ else
         build_image
     fi
 fi
+

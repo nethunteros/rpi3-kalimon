@@ -4,3 +4,4 @@ rpi2-kali
 bcm-rpi3
 kali-armhf
 gcc-arm-linux-gnueabihf-4.7
+prepackaged_kernel
