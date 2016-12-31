@@ -291,7 +291,7 @@ systemctl enable hciuart
 # Add Login Screen Tweaks
 # Add virtual keyboard to login screen
 echo "[greeter]" > /etc/lightdm/lightdm-gtk-greeter.conf
-echo "show-indicators=~language;~a11y;~session;~power" > /etc/lightdm/lightdm-gtk-greeter.conf
+echo "show-indicators=~language;~a11y;~session;~power" >> /etc/lightdm/lightdm-gtk-greeter.conf
 echo "keyboard=florence --focus" >> /etc/lightdm/lightdm-gtk-greeter.conf
 # Background image and change logo
 echo "background=/usr/share/images/desktop-base/kali-lockscreen_1280x1024.png" >> /etc/lightdm/lightdm-gtk-greeter.conf
