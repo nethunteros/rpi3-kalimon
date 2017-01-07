@@ -2,14 +2,16 @@
 #
 # Kali Linux on Raspberry Pi3 (ARM) by Binkyear (binkybear@nethunter.com)
 #
-# Not an official Kali Linux image but modified for my needs
-# May be useful to others 
+# * Not an official Kali Linux image but modified for my needs *
+# * May be useful to others *
 #
 # Included:
 #
 # * Geneate SSH Keys on first boot
 # * XFCE4/Bash Tweaks from G0tMi1k and others
 #       > https://github.com/g0tmi1k/os-scripts/blob/master/kali-rolling.sh
+# * Change default lock screen to match Kali desktop
+# * rpi-config to allow you to expand rootfs
 # * Wireless packages
 # * VPN Packages
 # * MITM Packages
@@ -17,7 +19,7 @@
 #       > re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
 #       > github: https://github.com/re4son/
 #       > nexmon: https://github.com/seemoo-lab/bcm-rpi3
-#
+#	> nexmon: https://github.com/seemoo-lab/nexmon/
 #
 #################
 # MODIFY THESE  #
@@ -52,7 +54,7 @@ if [[ $# -eq 0 ]] ; then
     exit
 fi
 
-basedir=`pwd`/rpi2-kali             # OUTPUT FOLDER
+basedir=`pwd`/rpi3-kali             # OUTPUT FOLDER
 architecture="armhf"                # DEFAULT ARCH
 DIRECTORY=`pwd`/kali-$architecture  # CHROOT FS FOLDER
 TOPDIR=`pwd`                        # CURRENT FOLDER
@@ -192,8 +194,11 @@ cat << EOF > kali-$architecture/usr/bin/monstart
 echo "Brining interface down"
 ifconfig wlan0 down
 rmmod brcmfmac
+modprobe brcmutil
 echo "Copying modified firmware"
-cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin && insmod /root/brcmfmac.ko
+cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
+insmod /root/brcmfmac.ko
+ifconfig wlan0 up 2> /dev/null
 EOF
 chmod +x kali-$architecture/usr/bin/monstart
 
@@ -201,12 +206,14 @@ cat << EOF > kali-$architecture/usr/bin/monstop
 #!/bin/bash
 echo "Brining interface wlan0 down"
 ifconfig wlan0 down
-rmmod brcmfmac
 echo "Copying original firmware"
 cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
+rmmod brcmfmac
 sleep 1
 echo "Reloading brcmfmac"
 modprobe brcmfmac
+ifconfig wlan0 up 2> /dev/null
+echo "Monitor mode stopped"
 EOF
 chmod +x kali-$architecture/usr/bin/monstop
 
@@ -467,14 +474,14 @@ size=8000 # Size of image in megabytes
 
 # Create the disk (img file) and partition it
 echo "[+] Creating image file for Raspberry Pi2"
-dd if=/dev/zero of=${basedir}/kali-$VERSION-rpi2.img bs=1M count=$size
-parted ${basedir}/kali-$VERSION-rpi2.img --script -- mklabel msdos
-parted ${basedir}/kali-$VERSION-rpi2.img --script -- mkpart primary fat32 0 64
-parted ${basedir}/kali-$VERSION-rpi2.img --script -- mkpart primary ext4 64 -1
+dd if=/dev/zero of=${basedir}/kali-$VERSION-rpi3.img bs=1M count=$size
+parted ${basedir}/kali-$VERSION-rpi3.img --script -- mklabel msdos
+parted ${basedir}/kali-$VERSION-rpi3.img --script -- mkpart primary fat32 0 64
+parted ${basedir}/kali-$VERSION-rpi3.img --script -- mkpart primary ext4 64 -1
 
 # Set the partition variables
 # http://matthewkwilliams.com/index.php/2015/10/09/mounting-partitions-from-image-files-on-linux/
-loopdevice=`losetup -f --show ${basedir}/kali-$VERSION-rpi2.img`
+loopdevice=`losetup -f --show ${basedir}/kali-$VERSION-rpi3.img`
 device=`kpartx -va $loopdevice| sed -E 's/.*(loop[0-9])p.*/\1/g' | head -1`
 sleep 5
 device="/dev/mapper/${device}"
@@ -554,14 +561,14 @@ _____  \\
   $(tput sgr0)"
 echo "*********************************************"
 cd $TOPDIR/bcm-rpi3/
-source setup_env.sh 
+source setup_env.sh
 cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
 make
 
 # Copy nexmon firmware and module
 echo "[+] Copying nexmon firmware and module"
-cp brcmfmac43430-sdio.bin ${basedir}/root/root/
-cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
+#cp brcmfmac43430-sdio.bin ${basedir}/root/root/
+#cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
 cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
 
 echo "[+] Moving to kernel folder and making modules"
@@ -577,7 +584,7 @@ cp arch/arm/boot/dts/overlays/*.dtb* ${basedir}/bootp/overlays/
 cp arch/arm/boot/dts/overlays/README ${basedir}/bootp/overlays/
 
 echo "[+] Creating and copying modules"
-make INSTALL_MOD_PATH=${basedir}/root firmware_install
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- firmware_install INSTALL_MOD_PATH=${basedir}/root
 
 echo "[+] Making kernel headers"
 make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- headers_install INSTALL_HDR_PATH=${basedir}/root/usr
@@ -627,7 +634,7 @@ rm -rf ${basedir}/root
 # If you're building an image for yourself, comment all of this out, as you
 # don't need the sha1sum or to compress the image, since you will be testing it
 # soon.
-OUTPUTFILE="${basedir}/kali-$VERSION-rpi2.img"
+OUTPUTFILE="${basedir}/kali-$VERSION-rpi3.img"
 
 if [ -f "${OUTPUTFILE}" ]; then
 
@@ -657,7 +664,6 @@ export CROSS_COMPILE=/opt/nexmon/buildtools/gcc-arm-none-eabi-5_4-2016q2-linux-a
 echo "[+] Fixing kernel symlink"
 cd /opt/nexmon/
 source setup_env.sh
-cd buildtools
 make
 # Symlink is broken since we build outside of device (will link to host system)
 rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
@@ -667,7 +673,9 @@ ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
 cd /usr/src/kernel
 make ARCH=arm scripts
 # Build nexmon
-cd /opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/ && make
+cd /opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/
+make clean
+make
 EOF
 chmod +x $dir/tmp/fixkernel.sh
 
@@ -698,15 +706,18 @@ int uname(struct utsname *buf)
 EOF
 
     echo "[+] Enable sshd at startup"
-
     chroot $dir /bin/bash -c "update-rc.d ssh enable"
 
-    echo "[] Symlink to build"
+    echo "[+] Symlink to build"
     chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
     chroot $dir /bin/bash -c "cd /tmp && gcc -Wall -shared -o libfakeuname.so fakeuname.c"
     chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && LD_PRELOAD=/tmp/libfakeuname.so /tmp/fixkernel.sh"
 
-    #rm -f $dir/tmp/*
+    echo "[+] Copying nexmon firmware"
+    cp $dir/opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/brcmfmac43430-sdio.bin ${dir}/root/
+    cp $dir/opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/brcmfmac43430-sdio.bin ${dir}/lib/firmware/brcm/
+
+    rm -f $dir/tmp/*
 
 echo "[+] Creating /boot/config.txt"
 cat << EOF > $dir/boot/config.txt
@@ -793,8 +804,8 @@ EOF
 
     # Copy nexmon firmware and module to /root
     # For testing
-    echo "[+] Copying nexmon firmware and module"
-    wget https://github.com/seemoo-lab/bcm-rpi3/releases/download/0.2/brcmfmac43430-sdio.bin -O $dir/root/brcmfmac43430-sdio.bin.gitrpi
+    #echo "[+] Copying nexmon firmware and module"
+    #wget https://github.com/seemoo-lab/bcm-rpi3/releases/download/0.2/brcmfmac43430-sdio.bin -O $dir/root/brcmfmac43430-sdio.bin.gitrpi
     #cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
 
     # Stick with original firmware so wifi works out of the box
@@ -845,7 +856,7 @@ EOF
     if [ "$COMPRESS" = true ] ; then
        echo "Compressing ${OUTPUTFILE}"
        xz -z ${OUTPUTFILE}
-       echo "Generating sha1sum for kali-$VERSION-rpi2.img.xz"
+       echo "Generating sha1sum for kali-$VERSION-rpi3.img.xz"
        sha1sum ${OUTPUTFILE}.xz > ${OUTPUTFILE}.xz.sha1sum
     fi
 
