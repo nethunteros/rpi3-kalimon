@@ -196,8 +196,8 @@ ifconfig wlan0 down
 rmmod brcmfmac
 modprobe brcmutil
 echo "Copying modified firmware"
-cp /root/brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
-insmod /root/brcmfmac.ko
+cp /opt/brcmfmac43430-sdio.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
+insmod /opt/brcmfmac.ko
 ifconfig wlan0 up 2> /dev/null
 EOF
 chmod +x kali-$architecture/usr/bin/monstart
@@ -207,7 +207,7 @@ cat << EOF > kali-$architecture/usr/bin/monstop
 echo "Brining interface wlan0 down"
 ifconfig wlan0 down
 echo "Copying original firmware"
-cp /root/brcmfmac43430-sdio.orig.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
+cp /opt/brcmfmac43430-sdio.orig.bin /lib/firmware/brcm/brcmfmac43430-sdio.bin
 rmmod brcmfmac
 sleep 1
 echo "Reloading brcmfmac"
@@ -253,6 +253,9 @@ rm -f /etc/ssh/ssh_host_*_key*
 # image insecure and enable root login with a password.
 echo "[+] Making root great again"
 sed -i -e 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+# Fix startup time from 5 minutes to 15 secs on raise interface wlan0
+sed -i 's/^TimeoutStartSec=5min/TimeoutStartSec=15/g' "/lib/systemd/system/networking.service" 
 
 # Turn off wifi power saving
 echo "[+] Turn off wifi power saving"
@@ -569,7 +572,7 @@ make
 echo "[+] Copying nexmon firmware and module"
 #cp brcmfmac43430-sdio.bin ${basedir}/root/root/
 #cp brcmfmac43430-sdio.bin ${basedir}/root/lib/firmware/brcm/
-cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
+cp brcmfmac/brcmfmac.ko ${basedir}/root/opt/
 
 echo "[+] Moving to kernel folder and making modules"
 cd $TOPDIR/bcm-rpi3/kernel/
@@ -714,8 +717,8 @@ EOF
     chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && LD_PRELOAD=/tmp/libfakeuname.so /tmp/fixkernel.sh"
 
     echo "[+] Copying nexmon firmware"
-    cp $dir/opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/brcmfmac43430-sdio.bin ${dir}/root/
-    cp $dir/opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/brcmfmac43430-sdio.bin ${dir}/lib/firmware/brcm/
+    cp $dir/opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/brcmfmac43430-sdio.bin ${dir}/opt/
+    #cp $dir/opt/nexmon/patches/bcm43438/7_45_41_26/nexmon/brcmfmac43430-sdio.bin ${dir}/lib/firmware/brcm/
 
     rm -f $dir/tmp/*
 
@@ -820,7 +823,7 @@ EOF
     cp -f $TOPDIR/misc/bt/BCM43430A1.hcd $dir/lib/firmware/brcm/BCM43430A1.hcd
 
     echo "[+] Creating backup wifi firmware in /root"
-    cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/root
+    cp -f $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/opt
 
     echo "[+] Setting up for future TFT build"
     wget https://raw.githubusercontent.com/Re4son/Re4son-Pi-TFT-Setup/rpts-4.4/adafruit-pitft-touch-cal -O $dir/root/adafruit-pitft-touch-cal
