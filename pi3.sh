@@ -419,9 +419,9 @@ alias net-pf-10 off
 EOF
 chmod 644 kali-$architecture/etc/modprobe.d/ipv6.conf
 
-umount kali-$architecture/dev/pts
-umount kali-$architecture/dev/
-umount kali-$architecture/proc
+umount -l kali-$architecture/dev/pts
+umount -l kali-$architecture/dev/
+umount -l kali-$architecture/proc
 }
 
 function ask() {
@@ -563,6 +563,12 @@ _____  \\
   #            #
   $(tput sgr0)"
 echo "*********************************************"
+echo "[+] Making sure kernel is up-to-date"
+cd $TOPDIR/bcm-rpi3/kernel/
+git checkout rpi-4.4.y-re4son
+git pull
+# This method of building kernel is no longer needed...but works so will leave it for now
+echo "[+] Building kernel"
 cd $TOPDIR/bcm-rpi3/
 source setup_env.sh
 cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
@@ -669,9 +675,9 @@ cd /opt/nexmon/
 source setup_env.sh
 make
 # Symlink is broken since we build outside of device (will link to host system)
-rm -rf /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+rm -rf /lib/modules/4.4.43-v7+/build
 ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
-ln -s /usr/src/kernel /lib/modules/4.4.39-v7_Re4son-Kali-Pi-TFT+/build
+ln -s /usr/src/kernel /lib/modules/4.4.43-v7+/build
 # make scripts doesn't work if we cross crompile
 cd /usr/src/kernel
 make ARCH=arm scripts
@@ -701,7 +707,7 @@ int uname(struct utsname *buf)
  int ret;
 
  ret = syscall(SYS_uname, buf);
- strcpy(buf->release, "4.4.39-v7_Re4son-Kali-Pi-TFT+");
+ strcpy(buf->release, "4.4.43-v7+");
  strcpy(buf->machine, "armv7l");
 
  return ret;
