@@ -610,12 +610,11 @@ EOF
 # let's create one.
 cat << EOF > ${basedir}/root/etc/fstab
 # <file system> <mount point>   <type>  <options>       <dump>  <pass>
-proc /proc proc nodev,noexec,nosuid 0  0
-/dev/mmcblk0p2  / ext4 errors=remount-ro 0 1
-# Change this if you add a swap partition or file
-#/var/swapfile none swap sw 0 0
-/dev/mmcblk0p1 /boot vfat noauto 0 0
+proc            /proc           proc    defaults          0       0
+/dev/mmcblk0p1  /boot           vfat    defaults          0       2
+/dev/mmcblk0p2  /               ext4    defaults,noatime  0       1
 EOF
+chmod 644 ${basedir}/root/etc/fstab
 
 # Unmount partitions
 umount $bootp
