@@ -5,7 +5,7 @@ prompt="Please select a file:"
 options=( $(find rpi3-kali -iregex ".*\.\(img\)" -print0 | xargs -0) )
 
 PS3="$prompt "
-select OUTPUTFILE in "${options[@]}" "Quit" ; do 
+select OUTPUTFILE in "${options[@]}" "Quit" ; do
     if (( REPLY == 1 + ${#options[@]} )) ; then
         exit
 

@@ -26,6 +26,7 @@
 #################
 
 BUILD_TFT=false      # Built for TFT Displays (Small LCD Screens)
+BUILD_MINIMAL=true   # Smaller Pi3 builds for those with small cards
 COMPRESS=false       # Compress output file with XZ (useful for release images)
 TFT_SIZE="35r"
 
@@ -58,7 +59,6 @@ basedir=`pwd`/rpi3-kali             # OUTPUT FOLDER
 architecture="armhf"                # DEFAULT ARCH
 DIRECTORY=`pwd`/kali-$architecture  # CHROOT FS FOLDER
 TOPDIR=`pwd`                        # CURRENT FOLDER
-VERSION=$1
 
 # TOOLCHAIN
 #export PATH=${PATH}:`pwd`/gcc-arm-linux-gnueabihf-4.7/bin
@@ -79,24 +79,38 @@ fi
 
 arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-utils"
 base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus cowsay"
-desktop="fonts-croscore fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
-xfce4="gtk3-engines-xfce lightdm-gtk-greeter-settings xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder"
+desktop="fonts-croscore firefox-esr fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
+xfce4="gtk3-engines-xfce lightdm-gtk-greeter-settings xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder xfce4-terminal"
 tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash php-cli sqlmap usbutils winexe wireshark"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
-extras="unzip unrar curl firefox-esr xfce4-terminal wpasupplicant florence tcpdump dnsutils gcc build-essential"
+extras="unzip unrar curl wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame"
 wireless="aircrack-ng cowpatty python-dev kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
-g0tmi1k="tmux ipcalc sipcalc psmisc htop gparted tor hashid p0f msfpc exe2hexbat windows-binaries thefuck burpsuite"
+g0tmi1k="tmux ipcalc sipcalc psmisc htop tor hashid p0f msfpc exe2hexbat windows-binaries thefuck burpsuite"
 
 # kernel sauces take up space yo.
-size=7000 # Size of image in megabytes
+size=7000 # Default size is 7GB
+
+if [ "${BUILD_MINIMAL}" = true ]; then
+    size=3000 # 3GB
+    packages="${arm} ${base} ${tools} ${services} ${extras} tmux"
+    VERSION=$1-minimal
+fi
+
+if [ "${BUILD_MINIMAL}" = true ] && [ "${BUILD_TFT}" = true ]; then
+    size=3000 # 3 GB
+    packages="${arm} ${base} ${tools} ${services} ${extras} ${tft} tmux"
+    VERSION=$1-minimal-tft
+fi
 
 if [ "${BUILD_TFT}" = true ] ; then
     packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn} ${g0tmi1k}"
+    VERSION=$1-full-tft
 else
     packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn} ${g0tmi1k}"
+    VERSION=$1-full
 fi
 
 # Archteicture for Pi3 is armhf
@@ -280,16 +294,12 @@ sed -i 's/^#AuthorizedKeysFile /AuthorizedKeysFile /g' "/etc/ssh/sshd_config"  #
 
 ############################################################
 # Depends for rasp-config and bluetooth
-apt-get install -y libnewt0.52 whiptail parted triggerhappy lua5.1 alsa-utils bluez-firmware
+apt-get install -y libnewt0.52 whiptail parted triggerhappy lua5.1 alsa-utils bluez-firmware bluez
 apt-get install -fy
 
 # Add bluetooth packages from Raspberry Pi
 # Make bluetooth work again:
 # https://whitedome.com.au/re4son/topic/solved-guide-to-get-rpi3-internal-bluetooth-working/
-cd /tmp
-wget https://archive.raspberrypi.org/debian/pool/main/b/bluez/bluez_5.23-2+rpi2_armhf.deb
-dpkg -i bluez_5.23-2+rpi2_armhf.deb
-apt-mark hold bluez
 
 wget https://archive.raspberrypi.org/debian/pool/main/p/pi-bluetooth/pi-bluetooth_0.1.1_armhf.deb
 dpkg -i pi-bluetooth_0.1.1_armhf.deb
@@ -674,9 +684,9 @@ cd /opt/nexmon/
 source setup_env.sh
 make
 # Symlink is broken since we build outside of device (will link to host system)
-rm -rf /lib/modules/4.4.43-v7+/build
+rm -rf /lib/modules/4.4.49-v7+/build
 ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
-ln -s /usr/src/kernel /lib/modules/4.4.43-v7+/build
+ln -s /usr/src/kernel /lib/modules/4.4.49-v7+/build
 # make scripts doesn't work if we cross crompile
 cd /usr/src/kernel
 make ARCH=arm scripts
@@ -706,7 +716,7 @@ int uname(struct utsname *buf)
  int ret;
 
  ret = syscall(SYS_uname, buf);
- strcpy(buf->release, "4.4.43-v7+");
+ strcpy(buf->release, "4.4.49-v7+");
  strcpy(buf->machine, "armv7l");
 
  return ret;
@@ -717,7 +727,7 @@ EOF
     chroot $dir /bin/bash -c "update-rc.d ssh enable"
 
     echo "[+] Symlink to build"
-    chroot $dir /bin/bash -c "apt-get install -y gawk libgmp3-dev libisl-dev bc"
+    chroot $dir /bin/bash -c "apt-get install -y qpdf gawk libgmp3-dev libisl-dev bc"
     chroot $dir /bin/bash -c "cd /tmp && gcc -Wall -shared -o libfakeuname.so fakeuname.c"
     chroot $dir /bin/bash -c "chmod +x /tmp/fixkernel.sh && LD_PRELOAD=/tmp/libfakeuname.so /tmp/fixkernel.sh"
 
