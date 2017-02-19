@@ -79,9 +79,9 @@ fi
 
 arm="abootimg cgpt fake-hwclock ntpdate u-boot-tools vboot-utils vboot-kernel-utils"
 base="e2fsprogs initramfs-tools kali-defaults kali-menu parted sudo usbutils bash-completion dbus cowsay"
-desktop="fonts-croscore firefox-esr fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit"
+desktop="fonts-croscore firefox-esr fonts-crosextra-caladea fonts-crosextra-carlito gnome-theme-kali kali-root-login lightdm network-manager network-manager-gnome xserver-xorg-video-fbdev xserver-xorg xinit wireshark"
 xfce4="gtk3-engines-xfce lightdm-gtk-greeter-settings xfconf kali-desktop-xfce xfce4-settings xfce4 xfce4-mount-plugin xfce4-notifyd xfce4-places-plugin xfce4-appfinder xfce4-terminal"
-tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash php-cli sqlmap usbutils winexe wireshark"
+tools="ethtool hydra john libnfc-bin mfoc nmap passing-the-hash php-cli sqlmap usbutils winexe tshark"
 services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip unrar curl wpasupplicant florence tcpdump dnsutils gcc build-essential"
@@ -807,24 +807,18 @@ EOF
     # let's create one.
     echo "[+] Creating /etc/fstab"
 cat << EOF > $dir/etc/fstab
+# Match: https://github.com/RPi-Distro/pi-gen/blob/dev/stage1/01-sys-tweaks/files/fstab
+#
 # <file system> <mount point>   <type>  <options>       <dump>  <pass>
-proc /proc proc nodev,noexec,nosuid 0  0
-/dev/mmcblk0p2  / ext4 errors=remount-ro 0 1
-# Change this if you add a swap partition or file
-#/var/swapfile none swap sw 0 0
-/dev/mmcblk0p1 /boot vfat noauto 0 0
+proc            /proc           proc    defaults          0       0
+/dev/mmcblk0p1  /boot           vfat    defaults          0       2
+/dev/mmcblk0p2  /               ext4    defaults,noatime  0       1
 EOF
 
     # Copy firmware for nexmon
     echo "[+] Copying wifi firmware related file brcmfmac43430-sdio.txt"
     mkdir -p $dir/lib/firmware/brcm/
     cp -rf $TOPDIR/misc/rpi3/brcmfmac43430-sdio.txt $dir/lib/firmware/brcm/
-
-    # Copy nexmon firmware and module to /root
-    # For testing
-    #echo "[+] Copying nexmon firmware and module"
-    #wget https://github.com/seemoo-lab/bcm-rpi3/releases/download/0.2/brcmfmac43430-sdio.bin -O $dir/root/brcmfmac43430-sdio.bin.gitrpi
-    #cp brcmfmac/brcmfmac.ko ${basedir}/root/root/
 
     # Stick with original firmware so wifi works out of the box
     cp $TOPDIR/nexmon/brcmfmac43430-sdio.orig.bin $dir/lib/firmware/brcm/brcmfmac43430-sdio.bin
