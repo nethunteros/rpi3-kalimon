@@ -26,6 +26,7 @@
 #################
 
 BUILD_TFT=false      # Built for TFT Displays (Small LCD Screens)
+BUILD_FULL=false     # Full image
 BUILD_MINIMAL=true   # Smaller Pi3 builds for those with small cards
 COMPRESS=false       # Compress output file with XZ (useful for release images)
 TFT_SIZE="35r"
@@ -90,27 +91,30 @@ wireless="aircrack-ng cowpatty python-dev kismet wifite pixiewps mana-toolkit dh
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
 g0tmi1k="tmux ipcalc sipcalc psmisc htop tor hashid p0f msfpc exe2hexbat windows-binaries thefuck burpsuite"
 
-# kernel sauces take up space yo.
-size=7000 # Default size is 7GB
-
 if [ "${BUILD_MINIMAL}" = true ]; then
+    echo "[+] Building minimal"
     size=3000 # 3GB
     packages="${arm} ${base} ${tools} ${services} ${extras} tmux"
-    VERSION=$1-minimal
+    VERSION="${1}-minimal"
 fi
 
 if [ "${BUILD_MINIMAL}" = true ] && [ "${BUILD_TFT}" = true ]; then
     size=3000 # 3 GB
     packages="${arm} ${base} ${tools} ${services} ${extras} ${tft} tmux"
-    VERSION=$1-minimal-tft
+    VERSION="${1}-minimal-tft"
 fi
 
-if [ "${BUILD_TFT}" = true ] ; then
+if [ "${BUILD_FULL}" = true ] && [ "${BUILD_TFT}" = true ] ; then
+    size=7000
     packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn} ${g0tmi1k}"
-    VERSION=$1-full-tft
-else
+    VERSION="${1}-full-tft"
+fi
+
+if [ "${BUILD_FULL}" = true ]; then
+    echo "[+] Building full"
+    size=7000
     packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn} ${g0tmi1k}"
-    VERSION=$1-full
+    VERSION="${1}-full"
 fi
 
 # Archteicture for Pi3 is armhf
