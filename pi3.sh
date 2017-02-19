@@ -28,7 +28,7 @@
 BUILD_TFT=false      # Built for TFT Displays (Small LCD Screens)
 BUILD_FULL=false     # Full image
 BUILD_MINIMAL=true   # Smaller Pi3 builds for those with small cards
-COMPRESS=false       # Compress output file with XZ (useful for release images)
+COMPRESS=true        # Compress output file with XZ (useful for release images)
 TFT_SIZE="35r"
 
 #################
@@ -94,13 +94,13 @@ g0tmi1k="tmux ipcalc sipcalc psmisc htop tor hashid p0f msfpc exe2hexbat windows
 if [ "${BUILD_MINIMAL}" = true ]; then
     echo "[+] Building minimal"
     size=3000 # 3GB
-    packages="${arm} ${base} ${tools} ${services} ${extras} tmux"
+    packages="${arm} ${base} ${tools} ${services} ${extras} ${wireless} tmux"
     VERSION="${1}-minimal"
 fi
 
 if [ "${BUILD_MINIMAL}" = true ] && [ "${BUILD_TFT}" = true ]; then
     size=3000 # 3 GB
-    packages="${arm} ${base} ${tools} ${services} ${extras} ${tft} tmux"
+    packages="${arm} ${base} ${tools} ${services} ${extras} ${tft} ${wireless} tmux"
     VERSION="${1}-minimal-tft"
 fi
 
