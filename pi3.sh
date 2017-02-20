@@ -538,7 +538,7 @@ export ARCH=arm
 export CROSS_COMPILE=arm-linux-gnueabihf-
 
 echo "[+] Clonging nexmon repo"
-git clone --depth 1 https://github.com/seemoo-lab/nexmon.git ${basedir}/root/opt/nexmon
+git clone https://github.com/seemoo-lab/nexmon.git ${basedir}/root/opt/nexmon
 
 # RPI Firmware (copy to /boot)
 echo "[+] Copying Raspberry Pi Firmware to /boot"
@@ -685,6 +685,7 @@ unset CROSS_COMPILE
 export CROSS_COMPILE=/opt/nexmon/buildtools/gcc-arm-none-eabi-5_4-2016q2-linux-armv7l/bin/arm-none-eabi-
 echo "[+] Fixing kernel symlink"
 cd /opt/nexmon/
+git reset --hard 3118fd885344ebbe4a627a78cd644abf49f6a9cc
 source setup_env.sh
 make
 # Symlink is broken since we build outside of device (will link to host system)
