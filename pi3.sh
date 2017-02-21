@@ -277,11 +277,15 @@ sed -i 's/^TimeoutStartSec=5min/TimeoutStartSec=15/g' "/lib/systemd/system/netwo
 
 # Turn off wifi power saving
 echo "[+] Turn off wifi power saving"
+
+sed --in-place "/exit 0/d" /etc/rc.local # Remove exit 0
+
 echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
-echo "iwconfig wlan0 power off" >> /etc/rc.local
+echo "iwconfig wlan0 power off" >> /etc/rc.local  # Add power saving disable
+echo "exit 0" >> /etc/rc.local  # Re-add exit 0
 
+# Enable SSH
 update-rc.d ssh enable
-
 
 ############## Extra g0tmi1k apps ###############
 
