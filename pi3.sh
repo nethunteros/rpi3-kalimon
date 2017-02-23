@@ -87,7 +87,7 @@ services="apache2 openssh-server tightvncserver dnsmasq hostapd"
 mitm="bettercap mitmf responder backdoor-factory bdfproxy responder"
 extras="unzip unrar curl wpasupplicant florence tcpdump dnsutils gcc build-essential"
 tft="fbi python-pbkdf2 python-pip cmake libusb-1.0-0-dev python-pygame"
-wireless="aircrack-ng cowpatty python-dev kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-gtk dhcpcd-dbus wireless-tools wicd-curses"
+wireless="iptables-converter aircrack-ng macchanger cowpatty python-dev kismet wifite pixiewps mana-toolkit dhcpcd5 dhcpcd-dbus wireless-tools wicd-curses"
 vpn="openvpn network-manager-openvpn network-manager-pptp network-manager-vpnc network-manager-openconnect network-manager-iodine"
 g0tmi1k="tmux ipcalc sipcalc psmisc htop tor hashid p0f msfpc exe2hexbat windows-binaries thefuck burpsuite"
 
@@ -166,6 +166,15 @@ iface lo inet loopback
 
 auto eth0
 iface eth0 inet dhcp
+
+# Remove if you don't want static IP
+allow-hotplug wlan0
+iface wlan0 inet static
+    address 10.0.0.1
+    netmask 255.255.255.0
+    network 10.0.0.0
+    broadcast 10.0.0.255
+#   wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
 EOF
 chmod 644 kali-$architecture/etc/network/interfaces
 
@@ -275,14 +284,60 @@ sed -i -e 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/ss
 # Fix startup time from 5 minutes to 15 secs on raise interface wlan0
 sed -i 's/^TimeoutStartSec=5min/TimeoutStartSec=15/g' "/lib/systemd/system/networking.service" 
 
+echo "[+] Create IP table rules for routing"
+cat <<EOF > /tmp/iptablescaptive
+iptables -t nat -A PREROUTING -i $phy -p udp --dport 53 -j DNAT --to 10.0.0.1
+iptables -t nat -A PREROUTING -p tcp --dport 80 -j DNAT --to-destination 10.0.0.1
+iptables -P FORWARD DROP
+EOF
+
+iptables-converter -s /tmp/iptablescaptive > /etc/iptables.rules
+rm /tmp/iptablescaptive
+
 # Turn off wifi power saving
-echo "[+] Turn off wifi power saving"
+echo "[+] Turn off wifi power saving and run iptables restore/forwarding at startup"
 
+# TODO: Add ability to read /config/somefile.txt to get hostname/wifi bssid/etc & upstream interface
 sed --in-place "/exit 0/d" /etc/rc.local # Remove exit 0
-
-echo "## Fix WiFi drop out issues ##" >> /etc/rc.local
+cat <<EOF >> /etc/rc.local
+echo "Cisco" > /etc/hostname && sed -i 's/kali/Cisco/' /etc/hosts
+ifconfig wlan0 10.0.0.1/24 up
+iptables-restore < /etc/iptables.rules
+echo '1' > /proc/sys/net/ipv4/ip_forward
+DENY="denyinterfaces $phy"
+if grep -Fxq "$DENY" /etc/dhcpcd.conf
+then
+    echo "Denyinterfaces already found in dhcpd.conf"
+else
+    echo $DENY >> /etc/dhcpcd.conf
+    service dhcpcd restart
+    ifdown $phy; ifup $phy
+fi
+EOF
 echo "iwconfig wlan0 power off" >> /etc/rc.local  # Add power saving disable
 echo "exit 0" >> /etc/rc.local  # Re-add exit 0
+
+# DNSMASQ conf for DHCP
+cat << EOF > /etc/dnsmasq.conf
+log-facility=/var/log/dnsmasq.log
+interface=wlan0
+listen-address=10.0.0.1
+bind-interfaces
+bogus-priv
+dhcp-range=10.0.0.100,10.0.0.250,12h
+dhcp-option=3,10.0.0.1
+dhcp-option=6,10.0.0.1
+#no-resolv
+log-queries
+EOF
+
+# This is wireless interface
+cat <<EOF > /etc/hostapd/hostapd.conf
+interface=wlan0
+driver=nl80211
+ssid=Free Wifi
+bssid=DD:3E:A8:A4:A2:8F
+EOF
 
 # Enable SSH
 update-rc.d ssh enable
