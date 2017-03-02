@@ -60,6 +60,24 @@ basedir=`pwd`/rpi3-kali             # OUTPUT FOLDER
 architecture="armhf"                # DEFAULT ARCH
 DIRECTORY=`pwd`/kali-$architecture  # CHROOT FS FOLDER
 TOPDIR=`pwd`                        # CURRENT FOLDER
+VER=$1
+
+# Set name outside of functions...
+if [ "${BUILD_MINIMAL}" = true ]; then
+    VERSION="${VER}-minimal"
+fi
+
+if [ "${BUILD_MINIMAL}" = true ] && [ "${BUILD_TFT}" = true ]; then
+    VERSION="${VER}-minimal-tft"
+fi
+
+if [ "${BUILD_FULL}" = true ] && [ "${BUILD_TFT}" = true ] ; then
+    VERSION="${VER}-full-tft"
+fi
+
+if [ "${BUILD_FULL}" = true ]; then
+    VERSION="${VER}-full"
+fi
 
 # TOOLCHAIN
 #export PATH=${PATH}:`pwd`/gcc-arm-linux-gnueabihf-4.7/bin
@@ -95,26 +113,22 @@ if [ "${BUILD_MINIMAL}" = true ]; then
     echo "[+] Building minimal"
     size=3000 # 3GB
     packages="${arm} ${base} ${tools} ${services} ${extras} ${wireless} tmux"
-    VERSION="${1}-minimal"
 fi
 
 if [ "${BUILD_MINIMAL}" = true ] && [ "${BUILD_TFT}" = true ]; then
     size=3000 # 3 GB
     packages="${arm} ${base} ${tools} ${services} ${extras} ${tft} ${wireless} tmux"
-    VERSION="${1}-minimal-tft"
 fi
 
 if [ "${BUILD_FULL}" = true ] && [ "${BUILD_TFT}" = true ] ; then
-    size=7000
+    size=7000 # 7 GB
     packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${tft} ${vpn} ${g0tmi1k}"
-    VERSION="${1}-full-tft"
 fi
 
 if [ "${BUILD_FULL}" = true ]; then
     echo "[+] Building full"
-    size=7000
+    size=7000 # 7 GB
     packages="${arm} ${base} ${desktop} ${tools} ${services} ${extras} ${mitm} ${wireless} ${xfce4} ${vpn} ${g0tmi1k}"
-    VERSION="${1}-full"
 fi
 
 # Archteicture for Pi3 is armhf
@@ -295,7 +309,7 @@ echo "privs.warn_if_elevated: FALSE" > /root/.wireshark/recent_common
 mv -f /usr/share/wireshark/init.lua{,.disabled}
 
 # Fun MOTD
-echo "Moo" | /usr/games/cowsay > /etc/motd
+echo "Kali PI3 with Nexmon" | /usr/games/cowsay > /etc/motd
 
 # SSH Allow authorized keys
 sed -i 's/^#AuthorizedKeysFile /AuthorizedKeysFile /g' "/etc/ssh/sshd_config"  # Allow for key based login
