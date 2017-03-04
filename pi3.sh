@@ -19,7 +19,7 @@
 #       > re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
 #       > github: https://github.com/re4son/
 #       > nexmon: https://github.com/seemoo-lab/bcm-rpi3
-#	> nexmon: https://github.com/seemoo-lab/nexmon/
+#   > nexmon: https://github.com/seemoo-lab/nexmon/
 #
 #################
 # MODIFY THESE  #
@@ -175,11 +175,22 @@ EOF
 chmod 644 kali-$architecture/etc/hosts
 
 cat << EOF > kali-$architecture/etc/network/interfaces
+# interfaces(5) file used by ifup(8) and ifdown(8)
+
+# Please note that this file is written to be used with dhcpcd
+# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
+
+# Include files from /etc/network/interfaces.d:
+source-directory /etc/network/interfaces.d
+
 auto lo
 iface lo inet loopback
 
-auto eth0
-iface eth0 inet dhcp
+iface eth0 inet manual
+
+allow-hotplug wlan0
+iface wlan0 inet manual
+    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
 EOF
 chmod 644 kali-$architecture/etc/network/interfaces
 
@@ -540,26 +551,6 @@ if ! shopt -oq posix; then
     . /etc/bash_completion
   fi
 fi
-EOF
-
-# Fix wifi with ipv4
-cat << EOF > /etc/network/interfaces
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-source-directory /etc/network/interfaces.d
-
-auto lo
-iface lo inet loopback
-
-iface eth0 inet manual
-
-allow-hotplug wlan0
-iface wlan0 inet manual
-    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
 EOF
 
 
