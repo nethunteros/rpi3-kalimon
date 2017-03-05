@@ -35,6 +35,10 @@ Then run pi3.sh with version number
 ```bash
 ./pi3.sh 0.1
 ```
+If you receive an error about debootstrap not having permissions then you may need to remount your home folder:
+```
+mount -o remount,exec,dev /home/[yourusername]/ -i
+```
 
 ## Modification
 
