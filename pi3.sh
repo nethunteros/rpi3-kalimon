@@ -19,7 +19,7 @@
 #       > re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
 #       > github: https://github.com/re4son/
 #       > nexmon: https://github.com/seemoo-lab/bcm-rpi3
-#   > nexmon: https://github.com/seemoo-lab/nexmon/
+#       > nexmon: https://github.com/seemoo-lab/nexmon/
 #
 #################
 # MODIFY THESE  #
@@ -552,6 +552,8 @@ if ! shopt -oq posix; then
   fi
 fi
 EOF
+
+chmod 644 kali-$architecture/root/.bashrc
 
 
 # Raspbian Configs worth adding
