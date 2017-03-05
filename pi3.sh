@@ -727,6 +727,7 @@ echo "[+] Making sure kernel is up-to-date"
 cd $TOPDIR/bcm-rpi3/kernel/
 git checkout rpi-4.4.y-re4son
 git pull
+make re4son_pi2_defconfig
 # This method of building kernel is no longer needed...but works so will leave it for now
 echo "[+] Building kernel"
 cd $TOPDIR/bcm-rpi3/
