@@ -19,7 +19,7 @@
 #       > re4son: https://whitedome.com.au/re4son/sticky-fingers-kali-pi/#Vanilla
 #       > github: https://github.com/re4son/
 #       > nexmon: https://github.com/seemoo-lab/bcm-rpi3
-#   > nexmon: https://github.com/seemoo-lab/nexmon/
+#       > nexmon: https://github.com/seemoo-lab/nexmon/
 #
 #################
 # MODIFY THESE  #
@@ -553,6 +553,8 @@ if ! shopt -oq posix; then
 fi
 EOF
 
+chmod 644 kali-$architecture/root/.bashrc
+
 
 # Raspbian Configs worth adding
 #cat << EOF > kali-$architecture/etc/wpa_supplicant/wpa_supplicant.conf 
@@ -730,6 +732,7 @@ echo "[+] Building kernel"
 cd $TOPDIR/bcm-rpi3/
 source setup_env.sh
 cd $TOPDIR/bcm-rpi3/firmware_patching/nexmon/
+cp ${TOPDIR}/kali-armhf/usr/include/arm-linux-gnueabihf/gmp.h ${TOPDIR}/bcm-rpi3/buildtools/gcc-arm-none-eabi-5_4-2016q2_x86/lib/gcc/arm-none-eabi/5.4.1/plugin/include/gmp.h
 make
 
 # Copy nexmon firmware and module
