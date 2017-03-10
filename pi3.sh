@@ -837,9 +837,9 @@ git reset --hard 3118fd885344ebbe4a627a78cd644abf49f6a9cc
 source setup_env.sh
 make
 # Symlink is broken since we build outside of device (will link to host system)
-rm -rf /lib/modules/4.4.49-v7+/build
+rm -rf /lib/modules/4.4.50-v7+/build
 ln -s /usr/lib/arm-linux-gnueabihf/libisl.so /usr/lib/arm-linux-gnueabihf/libisl.so.10
-ln -s /usr/src/kernel /lib/modules/4.4.49-v7+/build
+ln -s /usr/src/kernel /lib/modules/4.4.50-v7+/build
 # make scripts doesn't work if we cross crompile
 cd /usr/src/kernel
 make ARCH=arm scripts
@@ -869,7 +869,7 @@ int uname(struct utsname *buf)
  int ret;
 
  ret = syscall(SYS_uname, buf);
- strcpy(buf->release, "4.4.49-v7+");
+ strcpy(buf->release, "4.4.50-v7+");
  strcpy(buf->machine, "armv7l");
 
  return ret;
