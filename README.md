@@ -1,6 +1,6 @@
 ## Raspberry Pi 3 Image with monitor mode
 
-_This is an unofficial Kali Raspberry Pi 3 image_
+_This is an unofficial Kali Raspberry Pi 3 image. Official releases are now being moved to offsec repo_
 
 This uses re4son's PI TFT kernel with Nexmon firmware for native monitor mode.
 
