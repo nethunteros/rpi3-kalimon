@@ -337,6 +337,7 @@ interface=wlan0
 driver=nl80211
 ssid=Free Wifi
 bssid=DD:3E:A8:A4:A2:8F
+channel=6
 EOF
 
 # Enable SSH
