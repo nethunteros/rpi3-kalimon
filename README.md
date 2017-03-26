@@ -1,3 +1,11 @@
+# Official Builds are now in Offsec Repo:
+
+https://github.com/offensive-security/kali-arm-build-scripts
+
+Use the rpi3-nexmon.sh file and make sure you have a toolchain.
+
+# Old Info
+
 ## Raspberry Pi 3 Image with monitor mode
 
 _This is an unofficial Kali Raspberry Pi 3 image. Official releases are now being moved to offsec repo_
